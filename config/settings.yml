@@ -1,0 +1,31 @@
+plugins:
+  sixteen_aa_qualifications_enabled:
+    default: true
+    client: true
+  sixteen_aa_qualifications_visibility:
+    default: staff
+    type: enum
+    choices:
+      - everyone
+      - staff
+      - trust_level_2
+      - trust_level_3
+      - trust_level_4
+      - groups
+    client: true
+  sixteen_aa_qualifications_allowed_groups:
+    type: list
+    default: "16AA_Member"
+    client: true
+  sixteen_aa_qualifications_member_group_name:
+    default: "16AA_Member"
+    type: text
+  sixteen_aa_qualifications_group_priority:
+    default: ""
+    type: text
+  sixteen_aa_qualifications_group_definitions:
+    default: ""
+    type: text
+  sixteen_aa_qualifications_standalone_definitions:
+    default: ""
+    type: text

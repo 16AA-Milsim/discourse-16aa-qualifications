@@ -1,0 +1,28 @@
+en:
+  js:
+    sixteen_aa_qualifications:
+      title: "Qualifications"
+      empty_state: "No qualification data is available yet."
+      visible_to_groups: "Visible to groups"
+      nav_link: "Qualifications"
+      member_header: "Member"
+      group_heading_unassigned: "Other Members"
+      admin:
+        title: "16AA Qualifications"
+        save: "Save Changes"
+        reset: "Reset to Defaults"
+        save_success: "Qualification configuration updated."
+        reset_success: "Qualification configuration reset to defaults."
+        group_priority: "Group Priority"
+        qualification_groups: "Qualification Groups"
+        standalone_qualifications: "Standalone Qualifications"
+        empty_color_label: "Empty State Colour"
+        qualification_label: "Label"
+        qualification_badge: "Badge"
+        qualification_levels: "Levels"
+        add_level: "Add Level"
+        remove: "Remove"
+        add_group: "Add Group"
+        add_priority: "Add Priority"
+        instructions: "Manage the qualification groups, levels, and colours for the roster."
+        seed_warning: "Resetting restores the default 16AA layout from the plugin seed."

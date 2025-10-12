@@ -1,0 +1,12 @@
+en:
+  site_settings:
+    sixteen_aa_qualifications_enabled: "Enable the 16AA qualifications roster plugin."
+    sixteen_aa_qualifications_visibility: "Minimum visibility requirement for the qualifications roster."
+    sixteen_aa_qualifications_allowed_groups: "Additional groups that can view the roster when visibility is set to 'groups'."
+    sixteen_aa_qualifications_member_group_name: "Name of the base group whose members appear on the qualifications roster."
+    sixteen_aa_qualifications_group_priority: "JSON payload describing the ordered list of group priorities. Managed via the plugin admin page."
+    sixteen_aa_qualifications_group_definitions: "JSON payload describing qualification groups and their hierarchies. Managed via the plugin admin page."
+    sixteen_aa_qualifications_standalone_definitions: "JSON payload describing standalone qualifications. Managed via the plugin admin page."
+  js:
+    sixteen_aa_qualifications:
+      group_heading_unassigned: "Other Members"

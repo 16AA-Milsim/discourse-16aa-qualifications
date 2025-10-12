@@ -1,0 +1,47 @@
+.qualifications-page {
+  padding: 1rem;
+}
+
+.qualifications-table-wrapper {
+  overflow-x: auto;
+}
+
+.qualifications-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+
+  thead {
+    background: var(--primary-low, #f5f5f5);
+
+    th {
+      padding: 0.5rem;
+      text-align: center;
+      font-weight: 600;
+    }
+  }
+
+  td,
+  th {
+    padding: 0.5rem;
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .user-cell {
+    text-align: left;
+
+    .user-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+
+      .unit-position {
+        font-size: 0.75rem;
+        color: var(--primary-low-mid, #777);
+      }
+    }
+  }
+}
