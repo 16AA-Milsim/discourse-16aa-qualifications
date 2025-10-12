@@ -1,0 +1,52 @@
+<section class="qualifications-admin">
+  <header class="qualifications-admin__header">
+    <h1>{{i18n "sixteen_aa_qualifications.admin.title"}}</h1>
+    <div class="actions">
+      <DButton
+        @action={{this.saveConfig}}
+        @label="sixteen_aa_qualifications.admin.save"
+        @icon="save"
+        @disabled={{this.isSaving}}
+        class="btn-primary"
+      />
+      <DButton
+        @action={{this.resetToDefaults}}
+        @label="sixteen_aa_qualifications.admin.reset"
+        @icon="history"
+        @disabled={{this.isSaving}}
+      />
+    </div>
+  </header>
+
+  <p class="qualifications-admin__instructions">
+    {{i18n "sixteen_aa_qualifications.admin.instructions"}}
+  </p>
+
+  <div class="qualifications-admin__section">
+    <label for="group-priority">
+      {{i18n "sixteen_aa_qualifications.admin.group_priority"}}
+    </label>
+    <Textarea
+      id="group-priority"
+      @value={{this.groupPriorityText}}
+      @rows="16"
+      class="qualifications-admin__textarea"
+    />
+  </div>
+
+  <div class="qualifications-admin__section">
+    <label for="qualification-definitions">
+      {{i18n "sixteen_aa_qualifications.admin.qualification_definitions"}}
+    </label>
+    <Textarea
+      id="qualification-definitions"
+      @value={{this.qualificationsText}}
+      @rows="28"
+      class="qualifications-admin__textarea"
+    />
+  </div>
+
+  <aside class="qualifications-admin__hint">
+    {{i18n "sixteen_aa_qualifications.admin.seed_warning"}}
+  </aside>
+</section>

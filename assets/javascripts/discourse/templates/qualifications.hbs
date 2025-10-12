@@ -1,0 +1,68 @@
+<div class="qualifications-page">
+  <div class="qualifications-header">
+    <h1>{{i18n "sixteen_aa_qualifications.title"}}</h1>
+  </div>
+
+  {{#if this.hasRows}}
+    <div
+      class="qualifications-table-wrapper"
+      {{did-insert this.applyColours}}
+      {{did-update this.applyColours}}
+    >
+      <table class="qualifications-table">
+      <thead>
+        <tr>
+          <th class="user-column">{{i18n "sixteen_aa_qualifications.member_header"}}</th>
+          {{#each this.qualifications as |qualification|}}
+            <th>{{or qualification.name qualification.badge qualification.key}}</th>
+          {{/each}}
+        </tr>
+      </thead>
+      <tbody>
+        {{#each this.memberRows as |row|}}
+          <tr class="qualification-row">
+            <td class="user-cell">
+              <div class="user-meta">
+                <UserLink
+                  @user={{row.user}}
+                  class="username"
+                  data-username={{row.user.username}}
+                >
+                  {{row.user.displayName}}
+                </UserLink>
+                {{#if row.user.name}}
+                  <span class="name">
+                    {{row.user.name}}
+                  </span>
+                {{/if}}
+                <span class="unit-position">
+                  {{#if row.groupLabel}}
+                    {{row.groupLabel}}
+                  {{else}}
+                    {{i18n "sixteen_aa_qualifications.group_heading_unassigned"}}
+                  {{/if}}
+                </span>
+              </div>
+            </td>
+            {{#each row.user.qualifications as |qual|}}
+              <QualificationCell
+                @backgroundColor={{this.backgroundColor qual}}
+                @hasQualification={{this.hasQualification qual}}
+                @cellClass={{if (this.hasQualification qual) "qualified" "missing"}}
+              >
+                {{#if (this.hasQualification qual)}}
+                  {{this.qualificationLabel qual}}
+                {{/if}}
+              </QualificationCell>
+            {{/each}}
+          </tr>
+        {{/each}}
+      </tbody>
+      </table>
+    </div>
+  {{else}}
+    <div class="qualifications-empty">
+      {{i18n "sixteen_aa_qualifications.empty_state"}}
+    </div>
+  {{/if}}
+</div>

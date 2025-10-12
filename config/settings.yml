@@ -23,9 +23,14 @@ plugins:
   sixteen_aa_qualifications_group_priority:
     default: ""
     type: text
+  sixteen_aa_qualifications_definitions:
+    default: ""
+    type: text
   sixteen_aa_qualifications_group_definitions:
     default: ""
     type: text
+    hidden: true
   sixteen_aa_qualifications_standalone_definitions:
     default: ""
     type: text
+    hidden: true

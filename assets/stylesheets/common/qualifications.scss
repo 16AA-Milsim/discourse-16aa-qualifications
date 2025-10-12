@@ -1,6 +1,39 @@
 :root {
-  --16aa-qual-red: var(--danger-low, #f3d6d6);
-  --16aa-qual-yellow: var(--warning-low, #493600);
+  --16aa-qual-red: var(--danger-low, #b41414);
+  --16aa-qual-yellow: var(--warning-low, #fdba00);
+  --16aa-qual-green: var(--success-low, #43d317);
+  --16aa-qual-header-size: 0.8rem;
+  --16aa-qual-text-size: 0.85rem;
+  --16aa-qual-table-bg: var(--secondary, #fff);
+  --16aa-qual-header-bg: var(--primary-low, #f5f5f5);
+  --16aa-qual-border-color: var(--primary-low, #e3e3e3);
+  --16aa-qual-row-border: var(--primary-low, #e3e3e3);
+  --16aa-qual-user-name-color: var(--primary-medium, #555);
+  --16aa-qual-real-name-color: var(--primary-medium, #555);
+  --16aa-qual-unit-position-color: var(--primary-low-mid, #777);
+  --16aa-qual-missing-text-color: var(--primary-med-or-secondary-high, #555);
+  --16aa-qual-qualified-bg: var(--16aa-qual-green, #34a010);
+  --16aa-qual-qualified-text: var(--secondary, #fff);
+  --16aa-qual-empty-text-color: var(--primary-medium, #666);
+  --16aa-qual-empty-border-color: var(--primary-low, #ddd);
+}
+
+@if is-dark-color-scheme() {
+  :root {
+    --16aa-qual-green: var(--success-high, #3b7f29);
+    --16aa-qual-table-bg: var(--secondary, #151515);
+    --16aa-qual-header-bg: var(--primary-very-low, #1f1f1f);
+    --16aa-qual-border-color: var(--primary-low, #2a2a2a);
+    --16aa-qual-row-border: var(--primary-low, #2a2a2a);
+    --16aa-qual-user-name-color: var(--primary-high, #f2f2f2);
+    --16aa-qual-real-name-color: var(--primary-medium, #cfcfcf);
+    --16aa-qual-unit-position-color: var(--primary-medium, #b0b0b0);
+    --16aa-qual-missing-text-color: var(--primary-medium, #cfcfcf);
+    --16aa-qual-qualified-bg: var(--success-high, #41c01e);
+    --16aa-qual-qualified-text: var(--secondary, #fff);
+    --16aa-qual-empty-text-color: var(--primary-medium, #d0d0d0);
+    --16aa-qual-empty-border-color: var(--primary-very-low, #2a2a2a);
+  }
 }
 
 .qualifications-page {
@@ -14,7 +47,7 @@
 
     h1 {
       margin: 0;
-      font-size: 1.75rem;
+      font-size: 1.55rem;
       font-weight: 600;
     }
   }
@@ -29,19 +62,20 @@
   min-width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
-  background: var(--secondary, #fff);
+  background: var(--16aa-qual-table-bg);
   border-radius: 0.5rem;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 
   thead {
-    background: var(--primary-low, #f5f5f5);
+    background: var(--16aa-qual-header-bg);
 
     th {
       padding: 0.75rem;
       text-align: center;
       font-weight: 600;
-      border-bottom: 1px solid var(--primary-low, #e3e3e3);
+      border-bottom: 1px solid var(--16aa-qual-border-color);
+      font-size: var(--16aa-qual-header-size, 0.95rem);
     }
 
     .user-column {
@@ -51,7 +85,7 @@
 
   tbody {
     tr {
-      border-bottom: 1px solid var(--primary-low, #e3e3e3);
+      border-bottom: 1px solid var(--16aa-qual-row-border);
     }
 
     tr:last-child {
@@ -70,7 +104,8 @@
   .qualification-row {
     .user-cell {
       text-align: left;
-      min-width: 220px;
+      min-width: 120px;
+      font-size: var(--d-font-size-100, 1rem);
 
       .user-meta {
         display: flex;
@@ -79,16 +114,17 @@
 
         .username {
           font-weight: 600;
+          color: var(--16aa-qual-user-name-color);
         }
 
         .name {
           font-size: 0.85rem;
-          color: var(--primary-medium, #555);
+          color: var(--16aa-qual-real-name-color);
         }
 
         .unit-position {
           font-size: 0.75rem;
-          color: var(--primary-low-mid, #777);
+          color: var(--16aa-qual-unit-position-color);
         }
       }
     }
@@ -96,17 +132,20 @@
     td {
       min-width: 40px;
       font-weight: 500;
+      font-size: var(--16aa-qual-text-size, 0.9rem);
     }
 
     .qualification-cell {
       background-color: transparent;
 
       &.missing {
-        color: var(--primary-med-or-secondary-high, #555);
+        color: var(--16aa-qual-missing-text-color);
       }
 
       &.qualified {
-        color: var(--primary, #000);
+        background-color: var(--16aa-qual-qualified-bg);
+        color: var(--16aa-qual-qualified-text);
+        font-weight: 600;
       }
     }
   }
@@ -115,10 +154,10 @@
 .qualifications-empty {
   padding: 2rem;
   text-align: center;
-  color: var(--primary-medium, #666);
-  background: var(--secondary, #fff);
+  color: var(--16aa-qual-empty-text-color);
+  background: var(--16aa-qual-table-bg);
   border-radius: 0.5rem;
-  border: 1px dashed var(--primary-low, #ddd);
+  border: 1px dashed var(--16aa-qual-empty-border-color);
 }
 
 .qualifications-admin {
