@@ -2,8 +2,8 @@
 
 # name: discourse-16aa-qualifications
 # about: Visual roster of qualifications for 16AA members
-# version: 0.1
-# authors: Codex
+# version: 0.9.1
+# authors: Codex & Darojax
 # url: https://github.com/16aarapidreactionforce/discourse-16aa-qualifications
 
 enabled_site_setting :sixteen_aa_qualifications_enabled

@@ -1,0 +1,4 @@
+# Ignore local dev and summary artifacts
+code-qualifications-definitions.txt
+code_summary.txt
+generate_code_summary.sh
