@@ -2,6 +2,9 @@
 
 ## TODO
 - Add default fallback plugin settings json strings.
+- Implement some method so loading doesnt take so long when there are many users to display/search through.
+- Fix the wide CIC column that occurs sometimes.
+- Doesn't switch between light and dark mode until page is refreshed.
 
 This plugin provides a consolidated qualifications roster for members of the 16AA community. It exposes a `/qualifications` page that lists every member of the configured base group and displays their earned qualifications grouped by category.
 
