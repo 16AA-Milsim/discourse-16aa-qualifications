@@ -1,68 +1,120 @@
-<div class="qualifications-page">
+<div class={{concat "qualifications-page " (if
+  this.isDarkScheme "qualifications-page--dark" "qualifications-page--light" ) }}>
   <div class="qualifications-header">
     <h1>{{i18n "sixteen_aa_qualifications.title"}}</h1>
   </div>
 
   {{#if this.hasRows}}
-    <div
-      class="qualifications-table-wrapper"
-      {{did-insert this.applyColours}}
-      {{did-update this.applyColours}}
-    >
-      <table class="qualifications-table">
+  <div class="qualifications-table-wrapper" {{did-insert this.applyColours}} {{did-update this.applyColours}}>
+    <table class="qualifications-table">
       <thead>
         <tr>
           <th class="user-column">{{i18n "sixteen_aa_qualifications.member_header"}}</th>
           {{#each this.qualifications as |qualification|}}
-            <th>{{or qualification.name qualification.badge qualification.key}}</th>
+            <th>
+              <DTooltip
+                @identifier="qualification-header"
+                @placement="top"
+                @triggerEvent="hover"
+                @hideOn="pointerleave"
+                class="qualification-header-tooltip"
+              >
+                <:trigger>
+                  <span>
+                    {{or qualification.name qualification.badge qualification.key}}
+                  </span>
+                </:trigger>
+                <:content>
+                  {{qualification.tooltip}}
+                </:content>
+              </DTooltip>
+            </th>
           {{/each}}
         </tr>
       </thead>
       <tbody>
         {{#each this.memberRows as |row|}}
-          <tr class="qualification-row">
-            <td class="user-cell">
-              <div class="user-meta">
-                <UserLink
-                  @user={{row.user}}
-                  class="username"
-                  data-username={{row.user.username}}
-                >
-                  {{row.user.displayName}}
-                </UserLink>
-                {{#if row.user.name}}
-                  <span class="name">
-                    {{row.user.name}}
-                  </span>
+        <tr class="qualification-row">
+          <td class="user-cell">
+            <div class="user-meta">
+              <UserLink @user={{row.user}} class="username" data-username={{row.user.username}}>
+                {{row.user.displayName}}
+              </UserLink>
+              <span class="unit-position">
+                {{#if row.groupLabel}}
+                {{row.groupLabel}}
+                {{else}}
+                {{i18n "sixteen_aa_qualifications.group_heading_unassigned"}}
                 {{/if}}
-                <span class="unit-position">
-                  {{#if row.groupLabel}}
-                    {{row.groupLabel}}
+              </span>
+            </div>
+          </td>
+          {{#each row.user.qualifications as |qual|}}
+          <QualificationCell @backgroundColor={{this.backgroundColor qual}} @hasQualification={{this.hasQualification
+            qual}} @cellClass={{if (this.hasQualification qual) "qualified" "missing" }}>
+            {{#if (this.hasQualification qual)}}
+            {{#let (this.badgeDetails qual) as |badgeDetails|}}
+            {{#let (this.badgeLink badgeDetails) as |badgeLink|}}
+            <DTooltip @identifier="qualification-badge" @placement="bottom" @triggerEvent="hover" @hideOn="pointerleave"
+              class="qualification-tooltip">
+              <:trigger>
+                <div class="qualification-cell__trigger-wrapper">
+                  {{#if badgeLink}}
+                  <a class="qualification-cell__trigger" href={{badgeLink}}>
+                    {{this.displayValueFor qual}}
+                  </a>
                   {{else}}
-                    {{i18n "sixteen_aa_qualifications.group_heading_unassigned"}}
+                  <span class="qualification-cell__trigger">
+                    {{this.displayValueFor qual}}
+                  </span>
                   {{/if}}
-                </span>
-              </div>
-            </td>
-            {{#each row.user.qualifications as |qual|}}
-              <QualificationCell
-                @backgroundColor={{this.backgroundColor qual}}
-                @hasQualification={{this.hasQualification qual}}
-                @cellClass={{if (this.hasQualification qual) "qualified" "missing"}}
-              >
-                {{#if (this.hasQualification qual)}}
-                  {{this.qualificationLabel qual}}
+                </div>
+              </:trigger>
+              <:content>
+                {{#if badgeDetails}}
+                <div class="qualification-badge-tooltip">
+                  {{#if (or badgeDetails.image_url badgeDetails.icon)}}
+                  <div class="qualification-badge-tooltip__icon">
+                    {{#if badgeDetails.image_url}}
+                    <img alt={{badgeDetails.name}} src={{badgeDetails.image_url}} />
+                    {{else if badgeDetails.icon}}
+                    {{d-icon badgeDetails.icon}}
+                    {{/if}}
+                  </div>
+                  {{/if}}
+                  <div class="qualification-badge-tooltip__body">
+                    <div class="qualification-badge-tooltip__name">
+                      {{badgeDetails.name}}
+                    </div>
+                    {{#if (this.badgeDescription badgeDetails)}}
+                    <div class="qualification-badge-tooltip__description">
+                      {{this.badgeDescription badgeDetails}}
+                    </div>
+                    {{/if}}
+                  </div>
+                </div>
                 {{/if}}
-              </QualificationCell>
-            {{/each}}
-          </tr>
+              </:content>
+            </DTooltip>
+            {{/let}}
+            {{/let}}
+            {{else}}
+            <div class="qualification-cell__trigger-wrapper qualification-cell__trigger-wrapper--empty">
+              <span class="qualification-cell__trigger qualification-cell__trigger--empty">
+                {{this.displayValueFor qual}}
+              </span>
+            </div>
+            {{/if}}
+          </QualificationCell>
+          {{/each}}
+        </tr>
         {{/each}}
       </tbody>
-      </table>
-    </div>
+    </table>
+  </div>
   {{else}}
-    <div class="qualifications-empty">
-      {{i18n "sixteen_aa_qualifications.empty_state"}}
-    </div>
+  <div class="qualifications-empty">
+    {{i18n "sixteen_aa_qualifications.empty_state"}}
+  </div>
   {{/if}}
 </div>

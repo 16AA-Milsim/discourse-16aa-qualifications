@@ -2,6 +2,8 @@
 
 module Discourse16aaQualifications
   class RosterBuilder
+    PLUGIN_LOG_TAG = "[discourse-16aa-qualifications]".freeze
+
     def initialize(configuration, guardian: nil)
       @configuration = configuration
       @guardian = guardian || Guardian.new(nil)
@@ -21,7 +23,7 @@ module Discourse16aaQualifications
 
       group_memberships = fetch_group_memberships(members, relevant_group_ids)
       badges_lookup = fetch_badge_lookup(configuration.qualification_badge_names)
-      user_badges = fetch_user_badges(members, badges_lookup.values)
+      user_badges = fetch_user_badges(members, badges_lookup.values.map(&:id))
 
       grouped_users = build_grouped_users(
         members,
@@ -78,10 +80,16 @@ module Discourse16aaQualifications
     def fetch_badge_lookup(names)
       return {} if names.blank?
 
-      Badge
-        .where(name: names)
-        .pluck(:name, :id)
-        .to_h
+      normalized = names.map { |name| name.to_s.presence }.compact
+      return {} if normalized.blank?
+
+      badge_records =
+        Badge
+          .where(name: normalized)
+          .includes(:badge_type)
+          .index_by(&:name)
+
+      badge_records
     end
 
     def fetch_user_badges(users, badge_ids)
@@ -110,7 +118,15 @@ module Discourse16aaQualifications
 
       members.each do |user|
         user_group = determine_primary_group(user, lookup, relevant_groups, group_memberships)
-        user_data = serialize_user(user, badges_lookup, user_badges[user.id] || [])
+        begin
+          user_data = serialize_user(user, badges_lookup, user_badges[user.id] || [])
+        rescue => e
+          log(
+            :error,
+            "serialize_user failed for user #{user.id} (#{user.username}): #{e.class} - #{e.message}\n#{e.backtrace.join("\n")}"
+          )
+          next
+        end
 
         if user_group
           group_buckets[user_group]["users"] << user_data
@@ -171,19 +187,27 @@ module Discourse16aaQualifications
     end
 
     def serialize_group_definition(definition, badges_lookup, user_badges)
-      levels = Array(definition["levels"]).map do |level|
-        level.is_a?(Hash) ? level.dup : { "badge" => level.to_s }
-      end
+      levels =
+        Array(definition["levels"]).map do |level|
+          level_data = level.is_a?(Hash) ? level.dup : { "badge" => level.to_s }
+          badge_name = level_data["badge"] || level_data[:badge]
+          badge_name = badge_name.to_s if badge_name
+          level_data["badge"] = badge_name if badge_name
+          badge = badge_name.present? ? badges_lookup[badge_name] : nil
+          level_data["badge_details"] = serialize_badge(badge) if badge
+          level_data
+        end
 
       earned_level = nil
       levels.each do |level|
-        badge_name = level["badge"]
+        badge_name = level["badge"] || level[:badge]
+        badge_name = badge_name.to_s if badge_name
         next if badge_name.blank?
 
-        badge_id = badges_lookup[badge_name]
-        next unless badge_id
+        badge = badges_lookup[badge_name]
+        next unless badge&.id
 
-        earned_level = level if user_badges.include?(badge_id)
+        earned_level = level if user_badges.include?(badge.id)
       end
 
       {
@@ -216,15 +240,18 @@ module Discourse16aaQualifications
     end
 
     def serialize_standalone_definition(definition, badges_lookup, user_badges)
-      badge_name = definition["badge"]
-      badge_id = badge_name ? badges_lookup[badge_name] : nil
+      badge_name = (definition["badge"] || definition[:badge]).to_s
+      badge = badge_name ? badges_lookup[badge_name] : nil
+      badge_id = badge&.id
       earned = badge_id && user_badges.include?(badge_id)
+      badge_details = serialize_badge(badge)
 
       {
         "key" => definition["key"],
         "name" => definition["name"],
         "badge" => badge_name,
         "empty_color" => definition["empty_color"],
+        "badge_details" => badge_details,
         "earned" => !!earned,
       }
     end
@@ -235,6 +262,40 @@ module Discourse16aaQualifications
 
     def standalone_entry?(item)
       !group_entry?(item)
+    end
+
+    def serialize_badge(badge)
+      return nil unless badge
+
+      {
+        "id" => badge.id,
+        "name" => badge.display_name || badge.name,
+        "slug" => badge.slug,
+        "description" => badge.description,
+        "description_text" => strip_tags(badge.description),
+        "image_url" => badge.image_url,
+        "icon" => badge.icon,
+        "url" => badge_url(badge),
+      }
+    end
+
+    def strip_tags(value)
+      return nil if value.blank?
+
+      ApplicationController.helpers.strip_tags(value)
+    end
+
+    def log(level, message)
+      Rails.logger.public_send(level, "#{PLUGIN_LOG_TAG} #{message}") if Rails.logger
+    end
+
+    def badge_url(badge)
+      slug = badge.slug.presence || badge.name.to_s.parameterize.presence
+      return nil unless badge.id
+
+      path = "/badges/#{badge.id}"
+      path = "#{path}/#{slug}" if slug
+      Discourse.base_path.present? ? "#{Discourse.base_path}#{path}" : path
     end
   end
 end

@@ -66,6 +66,7 @@ module Discourse16aaQualifications
         normalized = {}
         normalized["key"] = extract_string(entry, "key")
         normalized["name"] = extract_string(entry, "name")
+        normalized["tooltip"] = extract_string(entry, "tooltip")
         normalized["empty_color"] = extract_string(entry, "empty_color")
 
         levels = entry["levels"] || entry[:levels]

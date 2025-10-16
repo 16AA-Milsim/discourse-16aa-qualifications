@@ -1,8 +1,13 @@
-<td
-  class={{this.cellClass}}
-  {{did-insert this.applyBackground}}
-  {{did-update this.applyBackground}}
-  {{will-destroy this.clearBackground}}
->
-  {{yield}}
+<td class="{{this.cellClass}}">
+  <div class="qualification-cell__overlay-wrapper">
+    {{#if (eq this.args.cellClass 'qualified')}}
+      <div class="qualification-cell--qualified-overlay"></div>
+    {{/if}}
+    {{#if (and (eq this.args.cellClass 'missing') this.args.backgroundColor)}}
+      <div class="qualification-cell--overlay"></div>
+    {{/if}}
+    <div class="qualification-cell__content">
+      {{yield}}
+    </div>
+  </div>
 </td>

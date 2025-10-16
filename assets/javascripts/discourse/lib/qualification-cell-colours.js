@@ -1,6 +1,8 @@
 const CSS_VAR_PATTERN = /^var\(--[a-z0-9_-]+\)$/i;
 const HEX_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const NAMED_PATTERN = /^[a-z]+$/i;
+const RGB_PATTERN =
+  /^rgba?\(\s*(\d{1,3}\s*,\s*){2}\d{1,3}(?:\s*,\s*(0|1|0?\.\d+))?\s*\)$/i;
 
 export default function enhanceQualificationTable(root) {
   if (!root) {
@@ -28,6 +30,10 @@ function sanitize(color) {
     return trimmed.toLowerCase();
   }
 
+  if (RGB_PATTERN.test(trimmed)) {
+    return trimmed.replace(/\s+/g, "");
+  }
+
   return null;
 }
 
@@ -38,8 +44,8 @@ function applyColours(root) {
       const color = cell.dataset.backgroundColor;
       const hasQualification = cell.dataset.hasQualification === "true";
 
-      cell.classList.remove("has-background-color");
-      cell.style.removeProperty("background-color");
+      cell.classList.remove("has-background-color", "qualification-cell--overlay");
+      cell.style.removeProperty("--qualification-overlay");
 
       if (hasQualification || !color) {
         return;
@@ -47,8 +53,8 @@ function applyColours(root) {
 
       const sanitized = sanitize(color);
       if (sanitized) {
-        cell.style.backgroundColor = sanitized;
-        cell.classList.add("has-background-color");
+        cell.style.setProperty("--qualification-overlay", sanitized);
+        cell.classList.add("qualification-cell--overlay");
       }
     });
 }
