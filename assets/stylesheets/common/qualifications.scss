@@ -94,6 +94,7 @@ $qual-hover-overlay-dark:  rgba(255, 255, 255, 0.05);
 .qualifications-table-wrapper {
   overflow: auto;
   height: auto;
+  min-height: 200px;
   max-height: calc(100vh - 210px);
   position: relative;
   background: var(--qual-table-bg);
@@ -123,6 +124,27 @@ $qual-hover-overlay-dark:  rgba(255, 255, 255, 0.05);
 
 /* keep hover wash below the separator */
 .qualifications-table .qualification-row:hover td::after { z-index: 1; }
+
+.qualifications-table thead > tr,
+.qualifications-table tbody > tr {
+  border-bottom: 0 !important;
+}
+
+.qualifications-table th,
+.qualifications-table td {
+  border-bottom: 0 !important;
+}
+
+.qualifications-table tbody > tr { position: relative; }
+.qualifications-table tbody > tr::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0; height: 1px;
+  background: var(--qual-row-border-color);
+  pointer-events: none;
+  z-index: 2;
+}
+.qualifications-table tbody > tr:last-child::after { display: none; }
 
 .qualifications-table {
   width: max-content;

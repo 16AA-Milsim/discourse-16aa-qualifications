@@ -8,9 +8,6 @@ plugins:
     choices:
       - everyone
       - staff
-      - trust_level_2
-      - trust_level_3
-      - trust_level_4
       - groups
     client: true
   sixteen_aa_qualifications_allowed_groups:

@@ -1,5 +1,8 @@
 # Discourse 16AA Qualifications Plugin
 
+## TODO
+- Add default fallback plugin settings json strings.
+
 This plugin provides a consolidated qualifications roster for members of the 16AA community. It exposes a `/qualifications` page that lists every member of the configured base group and displays their earned qualifications grouped by category.
 
 ## Features
