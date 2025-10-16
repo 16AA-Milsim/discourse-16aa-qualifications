@@ -1,39 +1,77 @@
-:root {
-  --16aa-qual-red: var(--danger-low, #b41414);
-  --16aa-qual-yellow: var(--warning-low, #fdba00);
-  --16aa-qual-green: var(--success-low, #43d317);
-  --16aa-qual-header-size: 0.8rem;
-  --16aa-qual-text-size: 0.85rem;
-  --16aa-qual-table-bg: var(--secondary, #fff);
-  --16aa-qual-header-bg: var(--primary-low, #f5f5f5);
-  --16aa-qual-border-color: var(--primary-low, #e3e3e3);
-  --16aa-qual-row-border: var(--primary-low, #e3e3e3);
-  --16aa-qual-user-name-color: var(--primary-medium, #555);
-  --16aa-qual-real-name-color: var(--primary-medium, #555);
-  --16aa-qual-unit-position-color: var(--primary-low-mid, #777);
-  --16aa-qual-missing-text-color: var(--primary-med-or-secondary-high, #555);
-  --16aa-qual-qualified-bg: var(--16aa-qual-green, #34a010);
-  --16aa-qual-qualified-text: var(--secondary, #fff);
-  --16aa-qual-empty-text-color: var(--primary-medium, #666);
-  --16aa-qual-empty-border-color: var(--primary-low, #ddd);
-}
+$qual-table-bg-light: #ffffff;
+$qual-header-bg-light: #f3f4f6;
+$qual-border-color-light: #d8dde6;
+$qual-row-border-light: #e5e7ef;
+$qual-username-color-light: #1f2937;
+$qual-real-name-color-light: #4b5563;
+$qual-unit-position-color-light: #6b7280;
+$qual-missing-text-light: #4b5563;
+$qual-qualified-bg-light: #2f9e44;
+$qual-qualified-text-light: #ffffff;
+$qual-empty-text-light: #4b5563;
+$qual-empty-bg-light: #ffffff;
+$qual-empty-border-light: #d8dde6;
+$qual-color-red-light: #c53f3f;
+$qual-color-orange-light: #f78b2d;
+$qual-color-yellow-light: #f5c14c;
+$qual-color-green-light: #2f9e44;
 
-@if is-dark-color-scheme() {
-  :root {
-    --16aa-qual-green: var(--success-high, #3b7f29);
-    --16aa-qual-table-bg: var(--secondary, #151515);
-    --16aa-qual-header-bg: var(--primary-very-low, #1f1f1f);
-    --16aa-qual-border-color: var(--primary-low, #2a2a2a);
-    --16aa-qual-row-border: var(--primary-low, #2a2a2a);
-    --16aa-qual-user-name-color: var(--primary-high, #f2f2f2);
-    --16aa-qual-real-name-color: var(--primary-medium, #cfcfcf);
-    --16aa-qual-unit-position-color: var(--primary-medium, #b0b0b0);
-    --16aa-qual-missing-text-color: var(--primary-medium, #cfcfcf);
-    --16aa-qual-qualified-bg: var(--success-high, #41c01e);
-    --16aa-qual-qualified-text: var(--secondary, #fff);
-    --16aa-qual-empty-text-color: var(--primary-medium, #d0d0d0);
-    --16aa-qual-empty-border-color: var(--primary-very-low, #2a2a2a);
-  }
+$qual-table-bg-dark: #1b1e2600;
+$qual-header-bg-dark: #FFFFFF08;
+$qual-border-color-dark: #333333;
+$qual-row-border-dark: #333333;
+$qual-username-color-dark: #d4d4d4;
+$qual-real-name-color-dark: #cbd5f5;
+$qual-unit-position-color-dark: #8d8d8d;
+$qual-missing-text-dark: #9aa4b2;
+$qual-qualified-bg-dark: #005320;
+$qual-qualified-text-dark: #e4e4e4;
+$qual-empty-text-dark: #cdd4e4;
+$qual-empty-bg-dark: #1b1e26;
+$qual-empty-border-dark: #2f3542;
+$qual-color-red-dark: #5b1111;
+$qual-color-orange-dark: #613213;
+$qual-color-yellow-dark: #615400;
+$qual-color-green-dark: #115316;
+
+@mixin set-qualification-vars(
+  $table-bg,
+  $header-bg,
+  $border-color,
+  $row-border,
+  $username-color,
+  $real-name-color,
+  $unit-position-color,
+  $missing-color,
+  $qualified-bg,
+  $qualified-text,
+  $empty-text,
+  $empty-bg,
+  $empty-border,
+  $red,
+  $orange,
+  $yellow,
+  $green
+) {
+  --qual-table-bg: #{$table-bg};
+  --qual-header-bg: #{$header-bg};
+  --qual-border-color: #{$border-color};
+  --qual-row-border-color: #{$row-border};
+  --qual-username-color: #{$username-color};
+  --qual-real-name-color: #{$real-name-color};
+  --qual-unit-position-color: #{$unit-position-color};
+  --qual-missing-text-color: #{$missing-color};
+  --qual-qualified-bg: #{$qualified-bg};
+  --qual-qualified-text: #{$qualified-text};
+  --qual-empty-text-color: #{$empty-text};
+  --qual-empty-bg: #{$empty-bg};
+  --qual-empty-border-color: #{$empty-border};
+  --qual-text-size: 0.9rem;
+  --qual-header-size: 0.95rem;
+  --16aa-qual-red: #{$red};
+  --16aa-qual-orange: #{$orange};
+  --16aa-qual-yellow: #{$yellow};
+  --16aa-qual-green: #{$green};
 }
 
 .qualifications-page {
@@ -53,6 +91,50 @@
   }
 }
 
+.qualifications-page--light {
+  @include set-qualification-vars(
+    $qual-table-bg-light,
+    $qual-header-bg-light,
+    $qual-border-color-light,
+    $qual-row-border-light,
+    $qual-username-color-light,
+    $qual-real-name-color-light,
+    $qual-unit-position-color-light,
+    $qual-missing-text-light,
+    $qual-qualified-bg-light,
+    $qual-qualified-text-light,
+    $qual-empty-text-light,
+    $qual-empty-bg-light,
+    $qual-empty-border-light,
+    $qual-color-red-light,
+    $qual-color-orange-light,
+    $qual-color-yellow-light,
+    $qual-color-green-light
+  );
+}
+
+.qualifications-page--dark {
+  @include set-qualification-vars(
+    $qual-table-bg-dark,
+    $qual-header-bg-dark,
+    $qual-border-color-dark,
+    $qual-row-border-dark,
+    $qual-username-color-dark,
+    $qual-real-name-color-dark,
+    $qual-unit-position-color-dark,
+    $qual-missing-text-dark,
+    $qual-qualified-bg-dark,
+    $qual-qualified-text-dark,
+    $qual-empty-text-dark,
+    $qual-empty-bg-dark,
+    $qual-empty-border-dark,
+    $qual-color-red-dark,
+    $qual-color-orange-dark,
+    $qual-color-yellow-dark,
+    $qual-color-green-dark
+  );
+}
+
 .qualifications-table-wrapper {
   overflow-x: auto;
 }
@@ -62,20 +144,20 @@
   min-width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
-  background: var(--16aa-qual-table-bg);
+  background: var(--qual-table-bg);
   border-radius: 0.5rem;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 
   thead {
-    background: var(--16aa-qual-header-bg);
+    background: var(--qual-header-bg);
 
     th {
       padding: 0.75rem;
       text-align: center;
       font-weight: 600;
-      border-bottom: 1px solid var(--16aa-qual-border-color);
-      font-size: var(--16aa-qual-header-size, 0.95rem);
+      border-bottom: 1px solid var(--qual-border-color);
+      font-size: var(--qual-header-size, 0.95rem);
     }
 
     .user-column {
@@ -85,7 +167,7 @@
 
   tbody {
     tr {
-      border-bottom: 1px solid var(--16aa-qual-row-border);
+      border-bottom: 1px solid var(--qual-row-border-color);
     }
 
     tr:last-child {
@@ -95,7 +177,7 @@
 
   td,
   th {
-    padding: 0.65rem;
+    padding: 0.25rem;
     text-align: center;
     vertical-align: middle;
     white-space: nowrap;
@@ -114,17 +196,17 @@
 
         .username {
           font-weight: 600;
-          color: var(--16aa-qual-user-name-color);
+          color: var(--qual-username-color);
         }
 
         .name {
           font-size: 0.85rem;
-          color: var(--16aa-qual-real-name-color);
+          color: var(--qual-real-name-color);
         }
 
         .unit-position {
           font-size: 0.75rem;
-          color: var(--16aa-qual-unit-position-color);
+          color: var(--qual-unit-position-color);
         }
       }
     }
@@ -132,19 +214,19 @@
     td {
       min-width: 40px;
       font-weight: 500;
-      font-size: var(--16aa-qual-text-size, 0.9rem);
+      font-size: var(--qual-text-size, 0.9rem);
     }
 
     .qualification-cell {
       background-color: transparent;
 
       &.missing {
-        color: var(--16aa-qual-missing-text-color);
+        color: var(--qual-missing-text-color);
       }
 
       &.qualified {
-        background-color: var(--16aa-qual-qualified-bg);
-        color: var(--16aa-qual-qualified-text);
+        background-color: var(--qual-qualified-bg);
+        color: var(--qual-qualified-text);
         font-weight: 600;
       }
     }
@@ -154,10 +236,10 @@
 .qualifications-empty {
   padding: 2rem;
   text-align: center;
-  color: var(--16aa-qual-empty-text-color);
-  background: var(--16aa-qual-table-bg);
+  color: var(--qual-empty-text-color);
+  background: var(--qual-empty-bg);
   border-radius: 0.5rem;
-  border: 1px dashed var(--16aa-qual-empty-border-color);
+  border: 1px dashed var(--qual-empty-border-color);
 }
 
 .qualifications-admin {
@@ -181,7 +263,7 @@
 
   &__instructions {
     margin-bottom: 1.5rem;
-    color: var(--primary-medium, #666);
+    color: #666;
   }
 
   &__section {
@@ -197,13 +279,5 @@
   &__textarea {
     width: 100%;
     font-family: var(--font-family-monospace);
-  }
-
-  &__hint {
-    margin-top: 2rem;
-    padding: 1rem;
-    border-left: 3px solid var(--primary-medium, #666);
-    background: var(--primary-very-low, #f9f9f9);
-    color: var(--primary-medium, #666);
   }
 }

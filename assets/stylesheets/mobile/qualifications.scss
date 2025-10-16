@@ -13,13 +13,13 @@
   table-layout: fixed;
 
   thead {
-    background: var(--primary-low, #f5f5f5);
+    background: var(--qual-header-bg);
 
     th {
       padding: 0.5rem;
       text-align: center;
       font-weight: 600;
-      font-size: var(--16aa-qual-header-size, 0.95rem);
+      font-size: var(--qual-header-size, 0.95rem);
     }
   }
 
@@ -41,7 +41,7 @@
 
       .unit-position {
         font-size: 0.75rem;
-        color: var(--primary-low-mid, #777);
+        color: var(--qual-unit-position-color);
       }
     }
   }
