@@ -1,13 +1,10 @@
-<td class="{{this.cellClass}}">
-  <div class="qualification-cell__overlay-wrapper">
-    {{#if (eq this.args.cellClass 'qualified')}}
-      <div class="qualification-cell--qualified-overlay"></div>
-    {{/if}}
-    {{#if (and (eq this.args.cellClass 'missing') this.args.backgroundColor)}}
-      <div class="qualification-cell--overlay"></div>
-    {{/if}}
-    <div class="qualification-cell__content">
-      {{yield}}
-    </div>
+<!-- assets/javascripts/discourse/components/qualification-cell.hbs -->
+<td
+  class="{{this.cellClass}}"
+  data-background-color={{this.args.backgroundColor}}
+  data-has-qualification={{this.args.hasQualification}}
+>
+  <div class="qualification-cell__content">
+    {{yield}}
   </div>
 </td>

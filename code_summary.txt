@@ -1,0 +1,2461 @@
+Generated on: Thu Oct 16 07:51:59 PM CEST 2025
+
+
+Directory Tree Overview:
+.
+├── app
+│   └── controllers
+│       └── discourse_16aa_qualifications
+│           ├── admin
+│           │   └── config_controller.rb
+│           └── qualifications_controller.rb
+├── assets
+│   ├── javascripts
+│   │   └── discourse
+│   │       ├── admin
+│   │       │   ├── controllers
+│   │       │   │   └── 16aa-qualifications.js
+│   │       │   ├── routes
+│   │       │   │   └── 16aa-qualifications.js
+│   │       │   └── templates
+│   │       │       └── 16aa-qualifications.hbs
+│   │       ├── components
+│   │       │   ├── qualification-cell.hbs
+│   │       │   └── qualification-cell.js
+│   │       ├── controllers
+│   │       │   └── qualifications.js
+│   │       ├── discourse-16aa-qualifications-route-map.js
+│   │       ├── helpers
+│   │       ├── initializers
+│   │       │   ├── add-qualification-cell-colours.js
+│   │       │   └── add-qualifications-nav.js
+│   │       ├── lib
+│   │       │   └── qualification-cell-colours.js
+│   │       ├── modifiers
+│   │       ├── routes
+│   │       │   └── qualifications.js
+│   │       └── templates
+│   │           ├── components
+│   │           └── qualifications.hbs
+│   └── stylesheets
+│       └── common
+│           └── qualifications.scss
+├── code-qualifications-definitions.txt
+├── code_summary.txt
+├── config
+│   ├── locales
+│   │   ├── client.en.yml
+│   │   └── server.en.yml
+│   ├── qualification_defaults.yml
+│   └── settings.yml
+├── generate_code_summary.sh
+├── lib
+│   ├── discourse_16aa_qualifications
+│   │   ├── config_seeder.rb
+│   │   ├── configuration.rb
+│   │   └── roster_builder.rb
+│   ├── discourse_16aa_qualifications.rb
+│   └── engine.rb
+├── log
+├── plugin.rb
+└── README.md
+
+28 directories, 29 files
+
+
+
+==== FILE: ./app/controllers/discourse_16aa_qualifications/admin/config_controller.rb ====
+# frozen_string_literal: true
+
+module Discourse16aaQualifications
+  module Admin
+    class ConfigController < ::Admin::AdminController
+      requires_plugin Discourse16aaQualifications::PLUGIN_NAME
+
+      def show
+        config = Configuration.load
+        render_json_dump(
+          group_priority: config.group_priority,
+          qualifications: config.qualifications,
+        )
+      end
+
+      def update
+        config_params = params.require(:config).permit!
+
+        definitions = Array(config_params[:qualifications])
+
+        SiteSetting.set(
+          :sixteen_aa_qualifications_group_priority,
+          serialize_setting(config_params[:group_priority]),
+        )
+
+        SiteSetting.set(
+          :sixteen_aa_qualifications_definitions,
+          serialize_setting(definitions),
+        )
+
+        split = split_definitions(definitions)
+        SiteSetting.set(
+          :sixteen_aa_qualifications_group_definitions,
+          serialize_setting(split[:groups]),
+        )
+        SiteSetting.set(
+          :sixteen_aa_qualifications_standalone_definitions,
+          serialize_setting(split[:standalone]),
+        )
+
+        render json: success_payload
+      end
+
+      def reset
+        ConfigSeeder.reset_to_defaults!
+        render json: success_payload
+      end
+
+      private
+
+      def success_payload
+        config_hash = Configuration.load.to_h.slice(
+          "group_priority",
+          "qualifications",
+        )
+
+        {
+          success: true,
+          config: config_hash,
+        }
+      end
+
+      def serialize_setting(value)
+        Array(value).to_json
+      end
+
+      def split_definitions(definitions)
+        groups = []
+        standalone = []
+
+        definitions.each do |item|
+          next unless item.is_a?(Hash)
+
+          levels = item["levels"] || item[:levels]
+          badge = item["badge"] || item[:badge]
+
+          if levels.is_a?(Array)
+            groups << item
+          elsif badge.present?
+            standalone << item
+          end
+        end
+
+        { groups: groups, standalone: standalone }
+      end
+    end
+  end
+end
+
+
+
+==== FILE: ./app/controllers/discourse_16aa_qualifications/qualifications_controller.rb ====
+# frozen_string_literal: true
+
+module Discourse16aaQualifications
+  class QualificationsController < ::ApplicationController
+    requires_plugin Discourse16aaQualifications::PLUGIN_NAME
+
+    before_action :ensure_enabled!
+    before_action :ensure_logged_in
+    before_action :ensure_can_view!
+
+    def index
+      if request.format.json?
+        config = Configuration.load
+        roster = RosterBuilder.new(config, guardian: guardian).build
+        render_json_dump(roster)
+      else
+        render body: nil
+      end
+    end
+
+    private
+
+    def ensure_enabled!
+      raise Discourse::NotFound unless SiteSetting.sixteen_aa_qualifications_enabled
+    end
+
+    def ensure_can_view!
+      visibility = SiteSetting.sixteen_aa_qualifications_visibility
+
+      return if visibility == "everyone"
+      return if current_user&.staff?
+
+      case visibility
+      when "staff"
+        raise Discourse::InvalidAccess
+      when "trust_level_2"
+        ensure_trust_level!(TrustLevel[2])
+      when "trust_level_3"
+        ensure_trust_level!(TrustLevel[3])
+      when "trust_level_4"
+        ensure_trust_level!(TrustLevel[4])
+      when "groups"
+        ensure_in_allowed_group!
+      else
+        raise Discourse::InvalidAccess
+      end
+    end
+
+    def ensure_trust_level!(minimum)
+      raise Discourse::InvalidAccess if current_user&.trust_level.to_i < minimum
+    end
+
+    def ensure_in_allowed_group!
+      raise Discourse::InvalidAccess unless current_user
+
+      allowed_groups = (SiteSetting.sixteen_aa_qualifications_allowed_groups || "")
+        .split("|")
+        .map(&:strip)
+        .reject(&:blank?)
+
+      if allowed_groups.blank?
+        fallback = SiteSetting.sixteen_aa_qualifications_member_group_name
+        allowed_groups = [fallback].compact_blank
+      end
+
+      raise Discourse::InvalidAccess if allowed_groups.blank?
+
+      has_membership = current_user.groups.where(name: allowed_groups).exists?
+      raise Discourse::InvalidAccess unless has_membership
+    end
+  end
+end
+
+
+
+==== FILE: ./assets/stylesheets/common/qualifications.scss ====
+/* ===== THEME TOKENS ===== */
+$qual-table-bg-light: rgb(241, 241, 241);
+$qual-header-text-light: rgb(34, 34, 34);
+$qual-header-bg-light: rgb(223, 223, 223);
+$qual-header-shadow-light: rgba(0, 0, 0, 0.116);
+$qual-border-color-light: rgb(196, 196, 196);
+$qual-row-border-light: rgb(255, 255, 255);
+$qual-username-color-light: rgba(31, 41, 55, 1);
+$qual-real-name-color-light: rgba(75, 85, 99, 1);
+$qual-unit-position-color-light: rgba(107, 114, 128, 1);
+$qual-missing-text-light: rgba(75, 85, 99, 1);
+$qual-qualified-bg-light: rgba(0, 255, 47, 0.185);
+$qual-qualified-text-light: rgba(255, 255, 255, 1);
+$qual-empty-text-light: rgba(75, 85, 99, 1);
+$qual-empty-bg-light: rgba(255, 255, 255, 1);
+$qual-empty-border-light: rgba(216, 221, 230, 1);
+$qual-color-red-light: rgba(255, 0, 0, 0.2);
+$qual-color-orange-light: rgba(255, 119, 0, 0.2);
+$qual-color-yellow-light: rgba(255, 179, 0, 0.2);
+$qual-color-green-light: rgba(0, 255, 47, 0.2);
+$qual-hover-overlay-light: rgba(0, 0, 0, 0.05);
+
+$qual-table-bg-dark: rgba(39, 39, 39, 1);
+$qual-header-text-dark: rgb(233, 233, 233);
+$qual-header-bg-dark: rgb(24, 24, 24);
+$qual-header-shadow-dark: rgba(0, 0, 0, 0.151);
+$qual-border-color-dark: rgb(20, 20, 20);
+$qual-row-border-dark: rgba(34, 34, 34, 1);
+$qual-username-color-dark: rgba(212, 212, 212, 1);
+$qual-real-name-color-dark: rgba(203, 213, 245, 1);
+$qual-unit-position-color-dark: rgba(141, 141, 141, 1);
+$qual-missing-text-dark: rgba(154, 164, 178, 1);
+$qual-qualified-bg-dark: rgba(0, 255, 38, 0.08);
+$qual-qualified-text-dark: rgba(228, 228, 228, 1);
+$qual-empty-text-dark: rgba(205, 212, 228, 1);
+$qual-empty-bg-dark: rgba(27, 30, 38, 1);
+$qual-empty-border-dark: rgba(47, 53, 66, 1);
+$qual-color-red-dark: rgba(255, 0, 0, 0.2);
+$qual-color-orange-dark: rgba(255, 102, 0, 0.2);
+$qual-color-yellow-dark: rgba(255, 174, 0, 0.2);
+$qual-color-green-dark: rgba(0, 255, 40, 0.2);
+$qual-hover-overlay-dark:  rgba(255, 255, 255, 0.05);
+
+@mixin set-qualification-vars(
+  $table-bg, $header-text, $header-bg, $header-shadow, $border-color, $row-border,
+  $username-color, $real-name-color, $unit-position-color, $missing-color,
+  $qualified-bg, $qualified-text, $empty-text, $empty-bg, $empty-border,
+  $red, $orange, $yellow, $green, $hover-overlay
+) {
+  --qual-table-bg: #{$table-bg};
+  --qual-header-text: #{$header-text};
+  --qual-header-bg: #{$header-bg};
+  --qual-header-shadow: #{$header-shadow};
+  --qual-border-color: #{$border-color};
+  --qual-row-border-color: #{$row-border};
+  --qual-username-color: #{$username-color};
+  --qual-real-name-color: #{$real-name-color};
+  --qual-unit-position-color: #{$unit-position-color};
+  --qual-missing-text-color: #{$missing-color};
+  --qual-qualified-bg: #{$qualified-bg};
+  --qual-qualified-text: #{$qualified-text};
+  --qual-empty-text-color: #{$empty-text};
+  --qual-empty-bg: #{$empty-bg};
+  --qual-empty-border-color: #{$empty-border};
+  --qual-text-size: 0.9rem;
+  --qual-header-size: 0.95rem;
+  --16aa-qual-red: #{$red};
+  --16aa-qual-orange: #{$orange};
+  --16aa-qual-yellow: #{$yellow};
+  --16aa-qual-green: #{$green};
+  --qual-hover-overlay: #{$hover-overlay};
+}
+
+/* ===== ROOT ===== */
+
+.qualifications-page--light {
+  @include set-qualification-vars(
+    $qual-table-bg-light, $qual-header-text-light, $qual-header-bg-light, $qual-header-shadow-light, $qual-border-color-light, $qual-row-border-light,
+    $qual-username-color-light, $qual-real-name-color-light, $qual-unit-position-color-light, $qual-missing-text-light,
+    $qual-qualified-bg-light, $qual-qualified-text-light, $qual-empty-text-light, $qual-empty-bg-light, $qual-empty-border-light,
+    $qual-color-red-light, $qual-color-orange-light, $qual-color-yellow-light, $qual-color-green-light, $qual-hover-overlay-light
+  );
+}
+
+.qualifications-page--dark {
+  @include set-qualification-vars(
+    $qual-table-bg-dark, $qual-header-text-dark, $qual-header-bg-dark, $qual-header-shadow-dark, $qual-border-color-dark, $qual-row-border-dark,
+    $qual-username-color-dark, $qual-real-name-color-dark, $qual-unit-position-color-dark, $qual-missing-text-dark,
+    $qual-qualified-bg-dark, $qual-qualified-text-dark, $qual-empty-text-dark, $qual-empty-bg-dark, $qual-empty-border-dark,
+    $qual-color-red-dark, $qual-color-orange-dark, $qual-color-yellow-dark, $qual-color-green-dark, $qual-hover-overlay-dark
+  );
+}
+
+.qualifications-table-wrapper {
+  overflow: auto;
+  height: calc(100vh - 210px);
+  position: relative;
+  background: var(--qual-table-bg);
+  box-shadow:
+    2px 5px 5px rgba(0, 0, 0, 0.075);
+  border-radius: 0.5rem;
+}
+
+/* ===== CELL LAYERS ===== */
+
+.qualification-cell__content {
+  position: relative; z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; text-align: center;
+}
+
+/* ===== TABLE ===== */
+
+.qualifications-table tbody tr:first-child,
+.qualifications-table tbody tr:first-child td {
+  border-top: 0 !important;
+  box-shadow: none;
+}
+
+.qualifications-table tbody tr:last-child::after { display: none; }
+
+/* keep hover wash below the separator */
+.qualifications-table .qualification-row:hover td::after { z-index: 1; }
+
+.qualifications-table {
+  width: max-content;
+  min-width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--qual-table-bg); border-radius: 0.5rem;
+
+  th:not(.user-column),
+  td:not(.user-cell) {
+    width: 2.6rem;
+    min-width: 2.6rem;
+    max-width: 2.6rem;
+  }
+
+  .user-cell,
+  .user-column {
+    width: auto;
+  }
+
+  thead::before {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 2px;
+    background: var(--qual-border-color);
+    pointer-events: none;
+    z-index: 12;
+  }
+
+  thead::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0px;
+    height: 10px;
+    pointer-events: none;
+    box-shadow: 0 6px 12px var(--qual-header-shadow);
+    z-index: 11;
+  }
+
+  thead {
+    background: var(--qual-header-bg);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    isolation: isolate;
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      padding: 0.5rem;
+      text-align: center;
+      font-weight: 600;
+      border-bottom: none;
+      /* box-shadow: inset 0 -2px var(--qual-border-color); */
+      background: var(--qual-header-bg);
+      font-size: var(--qual-header-size, 0.95rem);
+      &.user-column { text-align: left; }
+      color: var(--qual-header-text);
+    }
+  }
+
+  tbody {
+    tr:first-child, tr:first-child td {
+      border-top: 0 !important;
+      box-shadow: none;
+    }
+    tr::after {
+      content: "";
+      position: absolute;
+      left: 0; right: 0; bottom: 0; height: 1px;
+      background: var(--qual-row-border-color);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    tr:last-child::after { display: none; }
+
+    tr {
+      position: relative; /* required for the ::after 1px separator */
+    }
+  }
+
+  td {
+    position: relative;
+    padding: 0; text-align: center; vertical-align: middle; white-space: nowrap;
+  }
+
+  /* zebra columns (single, non-duplicated rules) */
+  .qualification-row td:nth-child(even):not(.user-cell) {
+    background: color-mix(in srgb, var(--qual-table-bg), rgba(255, 255, 255, 0.08));
+  }
+  .qualification-row td:nth-child(odd):not(.user-cell) {
+    background: color-mix(in srgb, var(--qual-table-bg), rgba(0, 0, 0, 0.08));
+  }
+
+  /* row hover wash (above tint overlays, below content) */
+  .qualification-row:hover td::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--qual-hover-overlay);
+    pointer-events: none;
+    z-index: 1;
+    border-radius: inherit;
+    transition: opacity 120ms ease-in-out;
+  }
+  .qualification-row:hover td.user-cell::after {
+    background: var(--qual-hover-overlay);
+  }
+
+  .qualification-row {
+    .user-cell {
+      text-align: left;
+      min-width: 120px;
+      font-size: var(--d-font-size-100, 1rem);
+      padding: 0.6rem 0.75rem;
+
+      .user-meta {
+        display: flex; flex-direction: column; gap: 0.15rem;
+
+        .username { font-weight: 600; color: var(--qual-username-color); }
+        .name { font-size: 0.85rem; color: var(--qual-real-name-color); }
+        .unit-position { font-size: 0.75rem; color: var(--qual-unit-position-color); }
+      }
+    }
+
+    td {
+      min-width: 3.4rem; font-weight: 500;
+      font-size: var(--qual-text-size, 0.9rem);
+    }
+
+    .qualification-cell {
+      background: transparent; padding: 0; width: 100%; height: 100%;
+      &.missing { color: var(--qual-missing-text-color); }
+    }
+  }
+}
+
+/* missing-state tint (uses --qualification-overlay set by JS) */
+td.qualification-cell--overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    to bottom,
+    var(--qualification-overlay, transparent),
+    var(--qualification-overlay, transparent)
+  );
+  background-blend-mode: multiply;
+  pointer-events: none;
+  z-index: 0;   /* base layer */
+}
+
+/* qualified-state tint (green) using the td’s 'qualified' class */
+td.qualification-cell.qualified::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    to bottom,
+    var(--qual-qualified-bg, rgba(47, 158, 68, 0.25)),
+    var(--qual-qualified-bg, rgba(47, 158, 68, 0.25))
+  );
+  background-blend-mode: multiply;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ===== EMPTY STATE ===== */
+.qualifications-empty {
+  padding: 2rem; text-align: center;
+  color: var(--qual-empty-text-color);
+  background: var(--qual-empty-bg);
+  border-radius: 0.5rem;
+  border: 1px dashed var(--qual-empty-border-color);
+}
+
+/* ===== INTERACTION ELEMENTS ===== */
+.qualification-cell__trigger,
+.qualification-cell__trigger:visited { color: inherit; text-decoration: none; }
+
+.qualification-cell__trigger:hover,
+.qualification-cell__trigger:active { text-decoration: none; }
+
+.qualification-cell__trigger:focus { text-decoration: underline; }
+
+.qualification-cell__trigger,
+.qualification-cell__trigger:visited,
+.qualification-cell__trigger:hover,
+.qualification-cell__trigger:active,
+.qualification-cell__trigger:focus { color: inherit; }
+
+.qualification-cell__trigger-wrapper {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; padding: 0.35rem 0.45rem; box-sizing: border-box; text-align: center;
+}
+.qualification-cell__trigger--empty { min-height: 1.2rem; }
+.qualification-cell__trigger-wrapper--empty { pointer-events: none; }
+
+.qualification-tooltip,
+.qualification-tooltip .fk-d-tooltip__trigger { display: block; width: 100%; height: 100%; }
+.qualification-tooltip .fk-d-tooltip__trigger-container {
+  display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;
+}
+
+/* ===== BADGE TOOLTIP CONTENT ===== */
+.qualification-badge-content { text-align: left; max-width: 260px; }
+.qualification-badge-tooltip { display: flex; align-items: flex-start; gap: 0.75rem; }
+.qualification-badge-tooltip__icon {
+  flex: 0 0 auto; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center;
+  img { max-width: 64px; max-height: 64px; border-radius: 4px; }
+  .d-icon { font-size: 1.75rem; }
+}
+.qualification-badge-tooltip__body { display: flex; flex-direction: column; gap: 0.35rem; }
+.qualification-badge-tooltip__name { font-weight: 600; font-size: 0.95rem; }
+.qualification-badge-tooltip__description { font-size: 0.85rem; line-height: 1.4; opacity: 0.85; }
+
+/* ===== ADMIN PAGE (unchanged, concise) ===== */
+.qualifications-admin {
+  padding: 2rem;
+  &__header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;
+    h1 { margin: 0; }
+    .actions { display: flex; gap: 0.75rem; }
+  }
+  &__instructions { margin-bottom: 1.5rem; color: #666; }
+  &__section { margin-bottom: 1.5rem; label { display: block; font-weight: 600; margin-bottom: 0.5rem; } }
+  &__textarea { width: 100%; font-family: var(--font-family-monospace); }
+}
+
+/* ===== MOBILE TWEAKS ===== */
+@media (max-width: 768px) {
+  .qualifications-page { padding: 1rem; }
+
+  .qualifications-table {
+    thead th { padding: 0.5rem; font-size: var(--qual-header-size, 0.95rem); }
+    td { white-space: nowrap; }
+    .qualification-row {
+      .user-cell { padding: 0.55rem 0.65rem; }
+      td { min-width: 3.4rem; font-size: var(--qual-text-size, 0.85rem); }
+      td:not(.user-cell) { width: 3.4rem; }
+    }
+  }
+
+  .qualification-cell__trigger-wrapper { padding: 0.4rem 0.45rem; }
+}
+
+
+
+==== FILE: ./assets/javascripts/discourse/components/qualification-cell.hbs ====
+<!-- assets/javascripts/discourse/components/qualification-cell.hbs -->
+<td
+  class="{{this.cellClass}}"
+  data-background-color={{this.args.backgroundColor}}
+  data-has-qualification={{this.args.hasQualification}}
+>
+  <div class="qualification-cell__content">
+    {{yield}}
+  </div>
+</td>
+
+
+
+==== FILE: ./assets/javascripts/discourse/components/qualification-cell.js ====
+import Component from "@glimmer/component";
+import { action } from "@ember/object";
+
+const CSS_VAR_PATTERN = /^var\(--[a-z0-9_-]+\)$/i;
+const HEX_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const NAMED_PATTERN = /^[a-z]+$/i;
+const RGB_PATTERN = /^rgba?\(\s*(\d{1,3}\s*,\s*){2}\d{1,3}(?:\s*,\s*(0|1|0?\.\d+))?\s*\)$/i;
+
+function sanitize(color) {
+  const trimmed = (color || "").trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (CSS_VAR_PATTERN.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (HEX_PATTERN.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (NAMED_PATTERN.test(trimmed)) {
+    return trimmed.toLowerCase();
+  }
+
+  if (RGB_PATTERN.test(trimmed)) {
+    return trimmed.replace(/\s+/g, "");
+  }
+
+  return null;
+}
+
+export default class QualificationCellComponent extends Component {
+  get cellClass() {
+    const base = "qualification-cell";
+    const extra = this.args.cellClass;
+
+    return extra ? `${base} ${extra}` : base;
+  }
+
+  @action
+  applyBackground(element) {
+    // Remove any old inline background color and class
+    element.classList.remove("has-background-color");
+    element.style.removeProperty("background-color");
+    // Do NOT set backgroundColor or add has-background-color here anymore.
+    // The overlay is now handled by CSS class and variable set elsewhere.
+  }
+
+  @action
+  clearBackground(element) {
+    element.classList.remove("has-background-color");
+    element.style.removeProperty("background-color");
+  }
+}
+
+
+
+==== FILE: ./assets/javascripts/discourse/controllers/qualifications.js ====
+import Controller from "@ember/controller";
+import { action } from "@ember/object";
+import { formatUsername } from "discourse/lib/utilities";
+import applyQualificationColours from "../lib/qualification-cell-colours";
+import getURL from "discourse/lib/get-url";
+
+const COLOR_TOKENS = [
+  "--16aa-qual-red",
+  "--16aa-qual-orange",
+  "--16aa-qual-yellow",
+  "--16aa-qual-green",
+];
+
+const LIGHT_COLOR_FALLBACKS = {
+  "--16aa-qual-red": "#c53f3f",
+  "--16aa-qual-orange": "#f78b2d",
+  "--16aa-qual-yellow": "#f5c14c",
+  "--16aa-qual-green": "#2f9e44",
+};
+
+const DARK_COLOR_FALLBACKS = {
+  "--16aa-qual-red": "#ff6b6b",
+  "--16aa-qual-orange": "#ffa94d",
+  "--16aa-qual-yellow": "#facc15",
+  "--16aa-qual-green": "#4ade80",
+};
+
+export default class QualificationsController extends Controller {
+  get memberRows() {
+    const groups = this.model?.groups || [];
+    const rows = [];
+
+    groups.forEach((group) => {
+      const label = group?.label || "";
+      (group?.users || []).forEach((user) => {
+        rows.push({ user: this.decorateUser(user), groupLabel: label });
+      });
+    });
+
+    return rows;
+  }
+
+  get qualifications() {
+    const config = this.model?.config || {};
+    if (Array.isArray(config.qualifications) && config.qualifications.length) {
+      return config.qualifications;
+    }
+
+    return [
+      ...(Array.isArray(config.qualification_groups) ? config.qualification_groups : []),
+      ...(Array.isArray(config.standalone_qualifications)
+        ? config.standalone_qualifications
+        : []),
+    ];
+  }
+
+  get hasRows() {
+    return this.memberRows.length > 0;
+  }
+
+  decorateUser(user) {
+    if (!user) {
+      return user;
+    }
+
+    const qualifications = Array.isArray(user.qualifications)
+      ? user.qualifications
+      : [
+          ...(Array.isArray(user.qualification_groups)
+            ? user.qualification_groups
+            : []),
+          ...(Array.isArray(user.standalone_qualifications)
+            ? user.standalone_qualifications
+            : []),
+        ];
+
+    return {
+      ...user,
+      qualifications,
+      displayName: this.displayNameFor(user),
+    };
+  }
+
+  get schemeType() {
+    if (typeof window === "undefined") {
+      return "light";
+    }
+
+    try {
+      const value = getComputedStyle(document.body).getPropertyValue(
+        "--scheme-type"
+      );
+      if (value?.trim()) {
+        return value.trim() === "dark" ? "dark" : "light";
+      }
+    } catch (e) {
+      // fall through to matchMedia or default
+    }
+
+    if (window.matchMedia?.("(prefers-color-scheme: dark)")?.matches) {
+      return "dark";
+    }
+
+    return "light";
+  }
+
+  get isDarkScheme() {
+    return this.schemeType === "dark";
+  }
+
+  get colorPalette() {
+    const scheme = this.schemeType;
+    if (!this._colorPalette || this._colorPalette.scheme !== scheme) {
+      const basePalette =
+        scheme === "dark"
+          ? { ...DARK_COLOR_FALLBACKS }
+          : { ...LIGHT_COLOR_FALLBACKS };
+
+      if (typeof window !== "undefined") {
+        const container = document.querySelector(".qualifications-page");
+        if (container) {
+          const styles = getComputedStyle(container);
+          COLOR_TOKENS.forEach((token) => {
+            const value = styles.getPropertyValue(token)?.trim();
+            if (value) {
+              basePalette[token] = value;
+            }
+          });
+        }
+      }
+
+      this._colorPalette = { scheme, values: basePalette };
+    }
+
+    return this._colorPalette.values;
+  }
+
+  resolveThemeColor(token) {
+    return this.colorPalette[token] || null;
+  }
+
+  displayNameFor(user) {
+    const username = user?.username || "";
+    let formatted = formatUsername(username) || username;
+
+    const prefix = (user?.rank_prefix || "").trim();
+    if (prefix) {
+      const normalized = formatted.toLowerCase();
+      const expected = `${prefix} `.toLowerCase();
+      if (!normalized.startsWith(expected)) {
+        formatted = `${prefix} ${formatted}`.trim();
+      }
+    }
+
+    return formatted;
+  }
+
+  hasQualification = (qualification) => {
+    if (!qualification) {
+      return false;
+    }
+
+    if (Array.isArray(qualification.levels)) {
+      return Boolean(qualification.earned);
+    }
+
+    return Boolean(qualification.earned);
+  };
+
+  qualificationLabel = (qualification) => {
+    if (!qualification) {
+      return null;
+    }
+
+    if (Array.isArray(qualification.levels)) {
+      const earned = qualification.earned;
+      if (!earned) {
+        return null;
+      }
+
+      return earned.label || earned.badge;
+    }
+
+    if (!qualification.earned) {
+      return null;
+    }
+
+    return qualification.name || qualification.badge || "✔";
+  };
+
+  badgeDetails = (qualification) => {
+    if (!qualification) {
+      return null;
+    }
+
+    if (Array.isArray(qualification.levels)) {
+      return qualification.earned?.badge_details || null;
+    }
+
+    return qualification.badge_details || null;
+  };
+
+  badgeLink = (badgeDetails) => {
+    if (!badgeDetails) {
+      return null;
+    }
+
+    let url = badgeDetails.url;
+
+    if (!url) {
+      const id = badgeDetails.id;
+      const slug = badgeDetails.slug || badgeDetails.name;
+
+      if (id) {
+        url = `/badges/${id}`;
+        if (slug) {
+          url += `/${slug}`;
+        }
+      }
+    }
+
+    return url ? getURL(url) : null;
+  };
+
+  badgeDescription = (badgeDetails) => {
+    if (!badgeDetails) {
+      return null;
+    }
+
+    return (
+      badgeDetails.long_description_text ||
+      badgeDetails.description_text ||
+      this.stripHtml(badgeDetails.long_description) ||
+      this.stripHtml(badgeDetails.description) ||
+      null
+    );
+  };
+
+  displayValueFor = (qualification) => {
+    if (!this.hasQualification(qualification)) {
+      return "";
+    }
+
+    if (Array.isArray(qualification.levels)) {
+      return this.qualificationLabel(qualification) || "";
+    }
+
+    return "✔";
+  };
+
+  stripHtml(source) {
+    if (!source) {
+      return null;
+    }
+
+    if (typeof document === "undefined") {
+      return source;
+    }
+
+    const div = document.createElement("div");
+    div.innerHTML = source;
+    const text = div.textContent || div.innerText || "";
+    return text.trim() || null;
+  }
+
+  backgroundColor = (qual) => {
+    if (!qual || qual.earned) {
+      return null;
+    }
+
+    const rawColor = qual.empty_color;
+    if (!rawColor) {
+      return null;
+    }
+
+    if (typeof rawColor === "string") {
+      const trimmed = rawColor.trim();
+      if (!trimmed) {
+        return null;
+      }
+
+      if (trimmed.startsWith("--")) {
+        return this.resolveThemeColor(trimmed);
+      }
+
+      return trimmed;
+    }
+
+    return rawColor;
+  };
+
+  @action
+  applyColours(element) {
+    this._colorPalette = null;
+    applyQualificationColours(element);
+  }
+}
+
+
+
+==== FILE: ./assets/javascripts/discourse/templates/qualifications.hbs ====
+<div class={{concat "qualifications-page " (if
+  this.isDarkScheme "qualifications-page--dark" "qualifications-page--light" ) }}>
+  <div class="qualifications-header">
+    <h1>{{i18n "sixteen_aa_qualifications.title"}}</h1>
+  </div>
+
+  {{#if this.hasRows}}
+  <div class="qualifications-table-wrapper" {{did-insert this.applyColours}} {{did-update this.applyColours}}>
+    <table class="qualifications-table">
+      <thead>
+        <tr>
+          <th class="user-column">{{i18n "sixteen_aa_qualifications.member_header"}}</th>
+          {{#each this.qualifications as |qualification|}}
+            <th>
+              <DTooltip
+                @identifier="qualification-header"
+                @placement="top"
+                @triggerEvent="hover"
+                @hideOn="pointerleave"
+                class="qualification-header-tooltip"
+              >
+                <:trigger>
+                  <span>
+                    {{or qualification.name qualification.badge qualification.key}}
+                  </span>
+                </:trigger>
+                <:content>
+                  {{qualification.tooltip}}
+                </:content>
+              </DTooltip>
+            </th>
+          {{/each}}
+        </tr>
+      </thead>
+      <tbody>
+        {{#each this.memberRows as |row|}}
+        <tr class="qualification-row">
+          <td class="user-cell">
+            <div class="user-meta">
+              <UserLink @user={{row.user}} class="username" data-username={{row.user.username}}>
+                {{row.user.displayName}}
+              </UserLink>
+              <span class="unit-position">
+                {{#if row.groupLabel}}
+                {{row.groupLabel}}
+                {{else}}
+                {{i18n "sixteen_aa_qualifications.group_heading_unassigned"}}
+                {{/if}}
+              </span>
+            </div>
+          </td>
+          {{#each row.user.qualifications as |qual|}}
+          <QualificationCell @backgroundColor={{this.backgroundColor qual}} @hasQualification={{this.hasQualification
+            qual}} @cellClass={{if (this.hasQualification qual) "qualified" "missing" }}>
+            {{#if (this.hasQualification qual)}}
+            {{#let (this.badgeDetails qual) as |badgeDetails|}}
+            {{#let (this.badgeLink badgeDetails) as |badgeLink|}}
+            <DTooltip @identifier="qualification-badge" @placement="bottom" @triggerEvent="hover" @hideOn="pointerleave"
+              class="qualification-tooltip">
+              <:trigger>
+                <div class="qualification-cell__trigger-wrapper">
+                  {{#if badgeLink}}
+                  <a class="qualification-cell__trigger" href={{badgeLink}}>
+                    {{this.displayValueFor qual}}
+                  </a>
+                  {{else}}
+                  <span class="qualification-cell__trigger">
+                    {{this.displayValueFor qual}}
+                  </span>
+                  {{/if}}
+                </div>
+              </:trigger>
+              <:content>
+                {{#if badgeDetails}}
+                <div class="qualification-badge-tooltip">
+                  {{#if (or badgeDetails.image_url badgeDetails.icon)}}
+                  <div class="qualification-badge-tooltip__icon">
+                    {{#if badgeDetails.image_url}}
+                    <img alt={{badgeDetails.name}} src={{badgeDetails.image_url}} />
+                    {{else if badgeDetails.icon}}
+                    {{d-icon badgeDetails.icon}}
+                    {{/if}}
+                  </div>
+                  {{/if}}
+                  <div class="qualification-badge-tooltip__body">
+                    <div class="qualification-badge-tooltip__name">
+                      {{badgeDetails.name}}
+                    </div>
+                    {{#if (this.badgeDescription badgeDetails)}}
+                    <div class="qualification-badge-tooltip__description">
+                      {{this.badgeDescription badgeDetails}}
+                    </div>
+                    {{/if}}
+                  </div>
+                </div>
+                {{/if}}
+              </:content>
+            </DTooltip>
+            {{/let}}
+            {{/let}}
+            {{else}}
+            <div class="qualification-cell__trigger-wrapper qualification-cell__trigger-wrapper--empty">
+              <span class="qualification-cell__trigger qualification-cell__trigger--empty">
+                {{this.displayValueFor qual}}
+              </span>
+            </div>
+            {{/if}}
+          </QualificationCell>
+          {{/each}}
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}
+  <div class="qualifications-empty">
+    {{i18n "sixteen_aa_qualifications.empty_state"}}
+  </div>
+  {{/if}}
+</div>
+
+
+==== FILE: ./assets/javascripts/discourse/routes/qualifications.js ====
+import Route from "@ember/routing/route";
+import { ajax } from "discourse/lib/ajax";
+
+export default class QualificationsRoute extends Route {
+  model() {
+    return ajax("/qualifications.json").catch((error) => {
+      if (error?.jqXHR?.status === 403) {
+        this.router.transitionTo("discovery.latest");
+      }
+      throw error;
+    });
+  }
+}
+
+
+
+==== FILE: ./assets/javascripts/discourse/admin/controllers/16aa-qualifications.js ====
+import Controller from "@ember/controller";
+import { tracked } from "@glimmer/tracking";
+import { action } from "@ember/object";
+import { ajax } from "discourse/lib/ajax";
+import { popupAjaxError } from "discourse/lib/ajax-error";
+import I18n from "I18n";
+
+export default class Admin16AAQualificationsController extends Controller {
+  @tracked groupPriorityText = "[]";
+  @tracked qualificationsText = "[]";
+  @tracked isSaving = false;
+
+  loadConfig(model) {
+    this.applyConfig(model);
+  }
+
+  applyConfig(model) {
+    this.groupPriorityText = this.stringify(model?.group_priority);
+    this.qualificationsText = this.stringify(model?.qualifications);
+  }
+
+  stringify(value) {
+    if (!value) {
+      return "[]";
+    }
+
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch (e) {
+      return "[]";
+    }
+  }
+
+  parse(text, label) {
+    try {
+      const parsed = JSON.parse(text || "[]");
+      if (!Array.isArray(parsed)) {
+        throw new Error(`${label} must be an array`);
+      }
+      return parsed;
+    } catch (error) {
+      throw new Error(`${label}: ${error.message}`);
+    }
+  }
+
+  @action
+  saveConfig() {
+    let groupPriority;
+    let qualifications;
+
+    try {
+      groupPriority = this.parse(this.groupPriorityText, "Group priority");
+      qualifications = this.parse(this.qualificationsText, "Qualification definitions");
+    } catch (error) {
+      this.flash(error.message, "error");
+      return;
+    }
+
+    this.isSaving = true;
+
+    ajax("/16aa-qualifications/admin/config", {
+      type: "PUT",
+      data: {
+        config: {
+          group_priority: groupPriority,
+          qualifications,
+        },
+      },
+    })
+      .then((response) => {
+        if (response?.success) {
+          this.flash(I18n.t("sixteen_aa_qualifications.admin.save_success"), "success");
+          if (response.config) {
+            this.applyConfig(response.config);
+          }
+        }
+      })
+      .catch(popupAjaxError)
+      .finally(() => {
+        this.isSaving = false;
+      });
+  }
+
+  @action
+  resetToDefaults() {
+    this.isSaving = true;
+
+    ajax("/16aa-qualifications/admin/config/reset", {
+      type: "POST",
+    })
+      .then((response) => {
+        if (response?.success && response.config) {
+          this.applyConfig(response.config);
+          this.flash(I18n.t("sixteen_aa_qualifications.admin.reset_success"), "success");
+        }
+      })
+      .catch(popupAjaxError)
+      .finally(() => {
+        this.isSaving = false;
+      });
+  }
+}
+
+
+
+==== FILE: ./assets/javascripts/discourse/admin/templates/16aa-qualifications.hbs ====
+<section class="qualifications-admin">
+  <header class="qualifications-admin__header">
+    <h1>{{i18n "sixteen_aa_qualifications.admin.title"}}</h1>
+    <div class="actions">
+      <DButton
+        @action={{this.saveConfig}}
+        @label="sixteen_aa_qualifications.admin.save"
+        @icon="save"
+        @disabled={{this.isSaving}}
+        class="btn-primary"
+      />
+      <DButton
+        @action={{this.resetToDefaults}}
+        @label="sixteen_aa_qualifications.admin.reset"
+        @icon="history"
+        @disabled={{this.isSaving}}
+      />
+    </div>
+  </header>
+
+  <p class="qualifications-admin__instructions">
+    {{i18n "sixteen_aa_qualifications.admin.instructions"}}
+  </p>
+
+  <div class="qualifications-admin__section">
+    <label for="group-priority">
+      {{i18n "sixteen_aa_qualifications.admin.group_priority"}}
+    </label>
+    <Textarea
+      id="group-priority"
+      @value={{this.groupPriorityText}}
+      @rows="16"
+      class="qualifications-admin__textarea"
+    />
+  </div>
+
+  <div class="qualifications-admin__section">
+    <label for="qualification-definitions">
+      {{i18n "sixteen_aa_qualifications.admin.qualification_definitions"}}
+    </label>
+    <Textarea
+      id="qualification-definitions"
+      @value={{this.qualificationsText}}
+      @rows="28"
+      class="qualifications-admin__textarea"
+    />
+  </div>
+
+  <aside class="qualifications-admin__hint">
+    {{i18n "sixteen_aa_qualifications.admin.seed_warning"}}
+  </aside>
+</section>
+
+
+
+==== FILE: ./assets/javascripts/discourse/admin/routes/16aa-qualifications.js ====
+import Route from "@ember/routing/route";
+import { ajax } from "discourse/lib/ajax";
+
+export default class Admin16AAQualificationsRoute extends Route {
+  model() {
+    return ajax("/16aa-qualifications/admin/config.json");
+  }
+
+  setupController(controller, model) {
+    super.setupController(controller, model);
+    controller.loadConfig(model);
+  }
+}
+
+
+
+==== FILE: ./assets/javascripts/discourse/initializers/add-qualifications-nav.js ====
+import { withPluginApi } from "discourse/lib/plugin-api";
+import I18n from "I18n";
+
+const PLUGIN_API_VERSION = "1.20.0";
+
+function canViewRoster(siteSettings, currentUser) {
+  if (!siteSettings?.sixteen_aa_qualifications_enabled) {
+    return false;
+  }
+
+  const visibility = siteSettings.sixteen_aa_qualifications_visibility;
+
+  if (visibility === "everyone") {
+    return true;
+  }
+
+  if (!currentUser) {
+    return false;
+  }
+
+  if (currentUser.staff) {
+    return true;
+  }
+
+  switch (visibility) {
+    case "staff":
+      return false;
+    case "trust_level_2":
+      return currentUser.trust_level >= 2;
+    case "trust_level_3":
+      return currentUser.trust_level >= 3;
+    case "trust_level_4":
+      return currentUser.trust_level >= 4;
+    case "groups": {
+      const allowed =
+        (siteSettings.sixteen_aa_qualifications_allowed_groups || "")
+          .split("|")
+          .map((g) => g.trim())
+          .filter(Boolean);
+
+      if (allowed.length === 0) {
+        return false;
+      }
+
+      const userGroups = currentUser.groups || [];
+      return userGroups.some((group) => allowed.includes(group.name));
+    }
+    default:
+      return false;
+  }
+}
+
+export default {
+  name: "16aa-qualifications-nav",
+
+  initialize() {
+    withPluginApi(PLUGIN_API_VERSION, (api) => {
+      const siteSettings = api.container.lookup("service:site-settings");
+
+      if (!siteSettings?.sixteen_aa_qualifications_enabled) {
+        return;
+      }
+
+      const condition = () => canViewRoster(siteSettings, api.getCurrentUser());
+
+      api.addNavigationBarItem({
+        name: "qualifications",
+        displayName: I18n.t("sixteen_aa_qualifications.nav_link"),
+        href: "/qualifications",
+        customFilter: condition,
+      });
+
+      api.addCommunitySectionLink((BaseCommunitySectionLink) => {
+        return class extends BaseCommunitySectionLink {
+          get name() {
+            return "qualifications";
+          }
+
+          get route() {
+            return "qualifications";
+          }
+
+          get currentWhen() {
+            return "qualifications";
+          }
+
+          get title() {
+            return I18n.t("sixteen_aa_qualifications.nav_link");
+          }
+
+          get text() {
+            return I18n.t("sixteen_aa_qualifications.nav_link");
+          }
+
+          get prefixValue() {
+            return "id-card-clip";
+          }
+
+          get shouldDisplay() {
+            return canViewRoster(this.siteSettings, this.currentUser);
+          }
+        };
+      });
+    });
+  },
+};
+
+
+
+==== FILE: ./assets/javascripts/discourse/initializers/add-qualification-cell-colours.js ====
+import { withPluginApi } from "discourse/lib/plugin-api";
+import applyQualificationColours from "../lib/qualification-cell-colours";
+
+export default {
+  name: "16aa-qualification-cell-colours",
+
+  initialize() {
+    if (window.__qualificationCellColoursInitialized) {
+      return;
+    }
+
+    window.__qualificationCellColoursInitialized = true;
+
+    withPluginApi("1.20.0", (api) => {
+      api.decorateCookedElement(
+        (root) => applyQualificationColours(root),
+        { onlyStream: false }
+      );
+    });
+  },
+};
+
+
+
+==== FILE: ./assets/javascripts/discourse/discourse-16aa-qualifications-route-map.js ====
+export default function () {
+  this.route("qualifications", { path: "/qualifications" });
+}
+
+
+
+==== FILE: ./assets/javascripts/discourse/lib/qualification-cell-colours.js ====
+const CSS_VAR_PATTERN = /^var\(--[a-z0-9_-]+\)$/i;
+const HEX_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const NAMED_PATTERN = /^[a-z]+$/i;
+const RGB_PATTERN =
+  /^rgba?\(\s*(\d{1,3}\s*,\s*){2}\d{1,3}(?:\s*,\s*(0|1|0?\.\d+))?\s*\)$/i;
+
+export default function enhanceQualificationTable(root) {
+  if (!root) {
+    return;
+  }
+
+  applyColours(root);
+}
+
+function sanitize(color) {
+  const trimmed = (color || "").trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (CSS_VAR_PATTERN.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (HEX_PATTERN.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (NAMED_PATTERN.test(trimmed)) {
+    return trimmed.toLowerCase();
+  }
+
+  if (RGB_PATTERN.test(trimmed)) {
+    return trimmed.replace(/\s+/g, "");
+  }
+
+  return null;
+}
+
+function applyColours(root) {
+  root
+    .querySelectorAll("td[data-background-color]")
+    .forEach((cell) => {
+      const color = cell.dataset.backgroundColor;
+      const hasQualification = cell.dataset.hasQualification === "true";
+
+      cell.classList.remove("has-background-color", "qualification-cell--overlay");
+      cell.style.removeProperty("--qualification-overlay");
+
+      if (hasQualification || !color) {
+        return;
+      }
+
+      const sanitized = sanitize(color);
+      if (sanitized) {
+        cell.style.setProperty("--qualification-overlay", sanitized);
+        cell.classList.add("qualification-cell--overlay");
+      }
+    });
+}
+
+
+
+==== FILE: ./config/locales/server.en.yml ====
+en:
+  site_settings:
+    sixteen_aa_qualifications_enabled: "Enable the 16AA qualifications roster plugin."
+    sixteen_aa_qualifications_visibility: "Minimum visibility requirement for the qualifications roster."
+    sixteen_aa_qualifications_allowed_groups: "Additional groups that can view the roster when visibility is set to 'groups'."
+    sixteen_aa_qualifications_member_group_name: "Name of the base group whose members appear on the qualifications roster."
+    sixteen_aa_qualifications_group_priority: "JSON payload describing the ordered list of group priorities. Managed via the plugin admin page."
+    sixteen_aa_qualifications_group_definitions: "JSON payload describing qualification groups and their hierarchies. Managed via the plugin admin page."
+    sixteen_aa_qualifications_standalone_definitions: "JSON payload describing standalone qualifications. Managed via the plugin admin page."
+  js:
+    sixteen_aa_qualifications:
+      group_heading_unassigned: "Other Members"
+
+
+
+==== FILE: ./config/locales/client.en.yml ====
+en:
+  js:
+    sixteen_aa_qualifications:
+      title: "Qualifications"
+      empty_state: "No qualification data is available yet."
+      visible_to_groups: "Visible to groups"
+      nav_link: "Qualifications"
+      member_header: "Member"
+      group_heading_unassigned: "Other Members"
+      admin:
+        title: "16AA Qualifications"
+        save: "Save Changes"
+        reset: "Reset to Defaults"
+        save_success: "Qualification configuration updated."
+        reset_success: "Qualification configuration reset to defaults."
+        group_priority: "Group Priority"
+        qualification_definitions: "Qualification Definitions"
+        empty_color_label: "Empty State Colour"
+        qualification_label: "Label"
+        qualification_badge: "Badge"
+        qualification_levels: "Levels"
+        add_level: "Add Level"
+        remove: "Remove"
+        add_group: "Add Group"
+        add_priority: "Add Priority"
+        instructions: "Manage the roster’s group priority and combined qualification definitions, including order, levels, and colours."
+        seed_warning: "Resetting restores the default 16AA layout from the plugin seed."
+
+
+
+==== FILE: ./config/settings.yml ====
+plugins:
+  sixteen_aa_qualifications_enabled:
+    default: true
+    client: true
+  sixteen_aa_qualifications_visibility:
+    default: staff
+    type: enum
+    choices:
+      - everyone
+      - staff
+      - trust_level_2
+      - trust_level_3
+      - trust_level_4
+      - groups
+    client: true
+  sixteen_aa_qualifications_allowed_groups:
+    type: list
+    default: "16AA_Member"
+    client: true
+  sixteen_aa_qualifications_member_group_name:
+    default: "16AA_Member"
+    type: text
+  sixteen_aa_qualifications_group_priority:
+    default: ""
+    type: text
+  sixteen_aa_qualifications_definitions:
+    default: ""
+    type: text
+  sixteen_aa_qualifications_group_definitions:
+    default: ""
+    type: text
+    hidden: true
+  sixteen_aa_qualifications_standalone_definitions:
+    default: ""
+    type: text
+    hidden: true
+
+
+
+==== FILE: ./config/qualification_defaults.yml ====
+group_priority:
+  - group: "Coy_IC"
+    label: "Coy IC"
+  - group: "Coy_2IC"
+    label: "Coy 2IC"
+  - group: "CSM"
+    label: "CSM"
+  - group: "1_Platoon_IC"
+    label: "1 Platoon IC"
+  - group: "2_Platoon_IC"
+    label: "2 Platoon IC"
+  - group: "3_Platoon_IC"
+    label: "3 Platoon IC"
+  - group: "4_Platoon_IC"
+    label: "4 Platoon IC"
+  - group: "Attachments_IC"
+    label: "Attachments IC"
+  - group: "1_Platoon_2IC"
+    label: "1 Platoon 2IC"
+  - group: "2_Platoon_2IC"
+    label: "2 Platoon 2IC"
+  - group: "3_Platoon_2IC"
+    label: "3 Platoon 2IC"
+  - group: "4_Platoon_2IC"
+    label: "4 Platoon 2IC"
+  - group: "Attachments_2IC"
+    label: "Attachments 2IC"
+  - group: "JHC_IC"
+    label: "JHC IC"
+  - group: "JHC_2IC"
+    label: "JHC 2IC"
+  - group: "JHC"
+    label: "JHC"
+  - group: "1-1_Section_IC"
+    label: "1-1 Section IC"
+  - group: "1-1_Section_2IC"
+    label: "1-1 Section 2IC"
+  - group: "1-1_Section"
+    label: "1-1 Section"
+  - group: "1-2_Section_IC"
+    label: "1-2 Section IC"
+  - group: "1-2_Section_2IC"
+    label: "1-2 Section 2IC"
+  - group: "1-2_Section"
+    label: "1-2 Section"
+  - group: "1-3_Section_IC"
+    label: "1-3 Section IC"
+  - group: "1-3_Section_2IC"
+    label: "1-3 Section 2IC"
+  - group: "1-3_Section"
+    label: "1-3 Section"
+  - group: "2-1_Section_IC"
+    label: "2-1 Section IC"
+  - group: "2-1_Section_2IC"
+    label: "2-1 Section 2IC"
+  - group: "2-1_Section"
+    label: "2-1 Section"
+  - group: "2-2_Section_IC"
+    label: "2-2 Section IC"
+  - group: "2-2_Section_2IC"
+    label: "2-2 Section 2IC"
+  - group: "2-2_Section"
+    label: "2-2 Section"
+  - group: "2-3_Section_IC"
+    label: "2-3 Section IC"
+  - group: "2-3_Section_2IC"
+    label: "2-3 Section 2IC"
+  - group: "2-3_Section"
+    label: "2-3 Section"
+  - group: "3-1_Section_IC"
+    label: "3-1 Section IC"
+  - group: "3-1_Section_2IC"
+    label: "3-1 Section 2IC"
+  - group: "3-1_Section"
+    label: "3-1 Section"
+  - group: "3-2_Section_IC"
+    label: "3-2 Section IC"
+  - group: "3-2_Section_2IC"
+    label: "3-2 Section 2IC"
+  - group: "3-2_Section"
+    label: "3-2 Section"
+  - group: "3-3_Section_IC"
+    label: "3-3 Section IC"
+  - group: "3-3_Section_2IC"
+    label: "3-3 Section 2IC"
+  - group: "3-3_Section"
+    label: "3-3 Section"
+  - group: "Fire_Support_Group_IC"
+    label: "Fire Support Group IC"
+  - group: "Fire_Support_Group_2IC"
+    label: "Fire Support Group 2IC"
+  - group: "Fire_Support_Group"
+    label: "Fire Support Group"
+  - group: "13AASR_IC"
+    label: "13AASR IC"
+  - group: "13AASR_2IC"
+    label: "13AASR 2IC"
+  - group: "13AASR"
+    label: "13AASR"
+  - group: "16CSMR_IC"
+    label: "16CSMR IC"
+  - group: "16CSMR_2IC"
+    label: "16CSMR 2IC"
+  - group: "16CSMR"
+    label: "16CSMR"
+  - group: "7RHA_IC"
+    label: "7RHA IC"
+  - group: "7RHA_2IC"
+    label: "7RHA 2IC"
+  - group: "7RHA"
+    label: "7RHA"
+  - group: "FST_IC"
+    label: "FST IC"
+  - group: "FST_2IC"
+    label: "FST 2IC"
+  - group: "FST"
+    label: "FST"
+  - group: "MI_IC"
+    label: "MI IC"
+  - group: "MI_2IC"
+    label: "MI 2IC"
+  - group: "MI"
+    label: "MI"
+  - group: "Force_Protection_IC"
+    label: "Force Protection IC"
+  - group: "Force_Protection_2IC"
+    label: "Force Protection 2IC"
+  - group: "Force_Protection"
+    label: "Force Protection"
+  - group: "Reserves"
+    label: "Reserves"
+
+qualification_groups:
+  - key: "soldiering"
+    name: "Soldiering"
+    empty_color: "--16aa-qual-red"
+    levels:
+      - badge: "CIC Phase 1"
+        label: "CIC Phase 1"
+      - badge: "CIC Phase 2"
+        label: "CIC Phase 2"
+  - key: "marksmanship"
+    name: "Marksmanship"
+    empty_color: "--16aa-qual-red"
+    levels:
+      - badge: "3rd Class Marksman"
+        label: "3rd Class Marksman"
+      - badge: "2nd Class Marksman"
+        label: "2nd Class Marksman"
+      - badge: "1st Class Marksman"
+        label: "1st Class Marksman"
+      - badge: "Sharpshooter"
+        label: "Sharpshooter"
+      - badge: "Sniper"
+        label: "Sniper"
+  - key: "signals"
+    name: "Signals"
+    empty_color: "--16aa-qual-yellow"
+    levels:
+      - badge: "Basic Signals"
+        label: "Basic Signals"
+      - badge: "Advanced Signaller"
+        label: "Advanced Signaller"
+  - key: "piloting"
+    name: "Piloting"
+    empty_color:
+    levels:
+      - badge: "Junior Pilot"
+        label: "Junior Pilot"
+      - badge: "Senior Pilot"
+        label: "Senior Pilot"
+  - key: "command"
+    name: "Command"
+    empty_color:
+    levels:
+      - badge: "FTCC"
+        label: "FTCC"
+      - badge: "CC"
+        label: "CC"
+      - badge: "SCBC"
+        label: "SCBC"
+      - badge: "PSBC"
+        label: "PSBC"
+      - badge: "PCBC"
+        label: "PCBC"
+  - key: "parachuting"
+    name: "Parachuting"
+    empty_color: "--16aa-qual-yellow"
+    levels:
+      - badge: "Paratrooper"
+        label: "Paratrooper"
+      - badge: "Freefaller"
+        label: "Freefaller"
+      - badge: "PJI"
+        label: "PJI"
+  - key: "joint_fires"
+    name: "Joint Fires"
+    empty_color:
+    levels:
+      - badge: "Forward Observer"
+        label: "Forward Observer"
+      - badge: "JTAC"
+        label: "JTAC"
+  - key: "anti_tank"
+    name: "Anti-Tank"
+    empty_color: "--16aa-qual-yellow"
+    levels:
+      - badge: "Basic AT"
+        label: "Basic AT"
+      - badge: "Advanced AT"
+        label: "Advanced AT"
+  - key: "medical"
+    name: "Medical"
+    empty_color:
+    levels:
+      - badge: "CTM"
+        label: "CTM"
+      - badge: "CTM Bronze"
+        label: "CTM Bronze"
+      - badge: "CTM Silver"
+        label: "CTM Silver"
+      - badge: "CTM Gold"
+        label: "CTM Gold"
+      - badge: "CMT"
+        label: "CMT"
+  - key: "mortars"
+    name: "Mortars"
+    empty_color:
+    levels:
+      - badge: "Mortar Operator"
+        label: "Mortar Operator"
+      - badge: "Mortar Line Commander"
+        label: "Mortar Line Commander"
+
+standalone_qualifications:
+  - key: "navigation"
+    name: "Navigation"
+    badge: "Navigation"
+    empty_color: "--16aa-qual-yellow"
+  - key: "machine_gunner"
+    name: "Machine Gunner"
+    badge: "Machine Gunner"
+    empty_color:
+  - key: "heavy_weapons_operator"
+    name: "Heavy Weapons Operator"
+    badge: "Heavy Weapons Operator"
+    empty_color:
+  - key: "itc_instructor"
+    name: "ITC Instructor"
+    badge: "ITC Instructor"
+    empty_color:
+  - key: "pathfinder"
+    name: "Pathfinder"
+    badge: "Pathfinder"
+    empty_color:
+
+
+
+==== FILE: ./plugin.rb ====
+# frozen_string_literal: true
+
+# name: discourse-16aa-qualifications
+# about: Visual roster of qualifications for 16AA members
+# version: 0.1
+# authors: Codex
+# url: https://github.com/16aarapidreactionforce/discourse-16aa-qualifications
+
+enabled_site_setting :sixteen_aa_qualifications_enabled
+
+register_asset "stylesheets/common/qualifications.scss"
+# register_asset "stylesheets/mobile/qualifications.scss"
+
+register_svg_icon "id-card-clip"
+
+require_relative "lib/engine"
+
+after_initialize do
+  ::Discourse16aaQualifications::ConfigSeeder.seed_if_needed!
+
+  Discourse::Application.routes.append do
+    mount ::Discourse16aaQualifications::Engine, at: "/16aa-qualifications"
+    get "/qualifications" => "discourse_16aa_qualifications/qualifications#index"
+    get "/qualifications.json" => "discourse_16aa_qualifications/qualifications#index", defaults: { format: :json }
+  end
+end
+
+
+
+==== FILE: ./lib/engine.rb ====
+# frozen_string_literal: true
+
+module ::Discourse16aaQualifications
+  PLUGIN_NAME = "discourse-16aa-qualifications"
+
+  class Engine < ::Rails::Engine
+    engine_name PLUGIN_NAME
+    isolate_namespace Discourse16aaQualifications
+    config.autoload_paths << File.join(root, "lib")
+  end
+end
+
+require_relative "discourse_16aa_qualifications"
+
+Discourse16aaQualifications::Engine.routes.draw do
+  get "/admin/config" => "admin/config#show"
+  put "/admin/config" => "admin/config#update"
+  post "/admin/config/reset" => "admin/config#reset"
+end
+
+
+
+==== FILE: ./lib/discourse_16aa_qualifications/config_seeder.rb ====
+# frozen_string_literal: true
+
+module Discourse16aaQualifications
+  class ConfigSeeder
+    class << self
+      def seed_if_needed!
+        defaults = load_defaults
+        seed_setting(
+          "sixteen_aa_qualifications_definitions",
+          default_definitions(defaults),
+        )
+        seed_setting(
+          "sixteen_aa_qualifications_group_priority",
+          defaults["group_priority"],
+        )
+        seed_setting(
+          "sixteen_aa_qualifications_group_definitions",
+          defaults["qualification_groups"],
+        )
+        seed_setting(
+          "sixteen_aa_qualifications_standalone_definitions",
+          defaults["standalone_qualifications"],
+        )
+      end
+
+      def reset_to_defaults!
+        defaults = load_defaults
+        apply_setting(
+          "sixteen_aa_qualifications_definitions",
+          default_definitions(defaults),
+        )
+        apply_setting(
+          "sixteen_aa_qualifications_group_priority",
+          defaults["group_priority"],
+        )
+        apply_setting(
+          "sixteen_aa_qualifications_group_definitions",
+          defaults["qualification_groups"],
+        )
+        apply_setting(
+          "sixteen_aa_qualifications_standalone_definitions",
+          defaults["standalone_qualifications"],
+        )
+      end
+
+      private
+
+      def seed_setting(setting_name, value)
+        return if value.blank?
+
+        current = read_setting(setting_name)
+        return if current.present?
+
+        apply_setting(setting_name, value)
+      end
+
+      def apply_setting(setting_name, value)
+        SiteSetting.set(setting_name, Array(value).to_json)
+      end
+
+      def load_defaults
+        @defaults ||= begin
+          path = File.expand_path("../../config/qualification_defaults.yml", __dir__)
+          YAML.safe_load(File.read(path), permitted_classes: [Symbol], aliases: false) || {}
+        rescue Errno::ENOENT, Psych::SyntaxError
+          {}
+        end
+      end
+
+      def default_definitions(defaults)
+        definitions = defaults["qualifications"]
+        return definitions if definitions.present?
+
+        Array(defaults["qualification_groups"]) + Array(defaults["standalone_qualifications"])
+      end
+
+      def read_setting(setting_name)
+        if SiteSetting.respond_to?(setting_name)
+          SiteSetting.public_send(setting_name)
+        else
+          nil
+        end
+      end
+    end
+  end
+end
+
+
+
+==== FILE: ./lib/discourse_16aa_qualifications/configuration.rb ====
+# frozen_string_literal: true
+
+module Discourse16aaQualifications
+  class Configuration
+    attr_reader :group_priority, :qualifications, :qualification_groups, :standalone_qualifications
+
+    def self.load
+      new(
+        group_priority_json: SiteSetting.sixteen_aa_qualifications_group_priority,
+        definitions_json: SiteSetting.sixteen_aa_qualifications_definitions,
+        qualification_groups_json: SiteSetting.sixteen_aa_qualifications_group_definitions,
+        standalone_json: SiteSetting.sixteen_aa_qualifications_standalone_definitions,
+        member_group_name: SiteSetting.sixteen_aa_qualifications_member_group_name,
+      )
+    end
+
+    def initialize(group_priority_json:, definitions_json:, qualification_groups_json:, standalone_json:, member_group_name:)
+      @group_priority = parse_array(group_priority_json)
+      raw_definitions = parse_array(definitions_json)
+      if raw_definitions.blank?
+        raw_definitions =
+          parse_array(qualification_groups_json) + parse_array(standalone_json)
+      end
+
+      @qualifications = normalize_definitions(raw_definitions)
+      @qualification_groups = @qualifications.select { |item| group_definition?(item) }
+      @standalone_qualifications = @qualifications.select { |item| standalone_definition?(item) }
+      @member_group_name = member_group_name.presence || "16AA_Member"
+    end
+
+    def member_group_name
+      @member_group_name
+    end
+
+    def qualification_badge_names
+      qualifications
+        .flat_map do |item|
+          if group_definition?(item)
+            (item["levels"] || []).map { |level| level["badge"] }
+          else
+            item["badge"]
+          end
+        end
+        .compact
+        .uniq
+    end
+
+    def to_h
+      {
+        "group_priority" => group_priority,
+        "qualifications" => qualifications,
+        "qualification_groups" => qualification_groups,
+        "standalone_qualifications" => standalone_qualifications,
+        "member_group_name" => member_group_name,
+      }
+    end
+
+    alias_method :as_json, :to_h
+
+    private
+
+    def normalize_definitions(entries)
+      entries.filter_map do |entry|
+        next unless entry.is_a?(Hash)
+
+        normalized = {}
+        normalized["key"] = extract_string(entry, "key")
+        normalized["name"] = extract_string(entry, "name")
+        normalized["tooltip"] = extract_string(entry, "tooltip")
+        normalized["empty_color"] = extract_string(entry, "empty_color")
+
+        levels = entry["levels"] || entry[:levels]
+        if levels.is_a?(Array)
+          normalized["levels"] = normalize_levels(levels)
+          next if normalized["levels"].blank?
+        else
+          badge = extract_string(entry, "badge")
+          next if badge.blank?
+
+          normalized["badge"] = badge
+          normalized["name"] ||= badge
+        end
+
+        normalized.compact
+      end
+    end
+
+    def normalize_levels(levels)
+      levels.filter_map do |level|
+        next unless level.is_a?(Hash)
+
+        badge = extract_string(level, "badge")
+        next if badge.blank?
+
+        label = extract_string(level, "label")
+
+        {
+          "badge" => badge,
+          "label" => label.presence || badge,
+        }
+      end
+    end
+
+    def extract_string(source, key)
+      value = source[key] || source[key.to_sym]
+      string = value.is_a?(String) ? value.strip : value&.to_s&.strip
+      string.presence
+    end
+
+    def group_definition?(definition)
+      definition["levels"].is_a?(Array) && definition["levels"].present?
+    end
+
+    def standalone_definition?(definition)
+      !group_definition?(definition)
+    end
+
+    def parse_array(raw)
+      case raw
+      when Array
+        raw
+      when String
+        raw = raw.strip
+        return [] if raw.blank?
+
+        begin
+          parsed = ::JSON.parse(raw)
+          parsed.is_a?(Array) ? parsed : []
+        rescue JSON::ParserError
+          []
+        end
+      else
+        []
+      end
+    end
+  end
+end
+
+
+
+==== FILE: ./lib/discourse_16aa_qualifications/roster_builder.rb ====
+# frozen_string_literal: true
+
+module Discourse16aaQualifications
+  class RosterBuilder
+    PLUGIN_LOG_TAG = "[discourse-16aa-qualifications]".freeze
+
+    def initialize(configuration, guardian: nil)
+      @configuration = configuration
+      @guardian = guardian || Guardian.new(nil)
+    end
+
+    def build
+      base_group = Group.find_by(name: configuration.member_group_name)
+
+      return empty_payload unless base_group
+
+      members = fetch_members(base_group)
+      return empty_payload if members.empty?
+
+      relevant_group_names = configuration.group_priority.map { |item| item["group"] }.compact.uniq
+      relevant_groups = Group.where(name: relevant_group_names).index_by(&:name)
+      relevant_group_ids = relevant_groups.values.map(&:id)
+
+      group_memberships = fetch_group_memberships(members, relevant_group_ids)
+      badges_lookup = fetch_badge_lookup(configuration.qualification_badge_names)
+      user_badges = fetch_user_badges(members, badges_lookup.values.map(&:id))
+
+      grouped_users = build_grouped_users(
+        members,
+        relevant_groups,
+        group_memberships,
+        badges_lookup,
+        user_badges,
+      )
+
+      {
+        config: {
+          group_priority: configuration.group_priority,
+          qualifications: configuration.qualifications,
+          qualification_groups: configuration.qualification_groups,
+          standalone_qualifications: configuration.standalone_qualifications,
+        },
+        groups: grouped_users,
+      }
+    end
+
+    private
+
+    attr_reader :configuration, :guardian
+
+    def empty_payload
+      {
+        config: {
+          group_priority: configuration.group_priority,
+          qualifications: configuration.qualifications,
+          qualification_groups: configuration.qualification_groups,
+          standalone_qualifications: configuration.standalone_qualifications,
+        },
+        groups: [],
+      }
+    end
+
+    def fetch_members(base_group)
+      base_group
+        .users
+        .activated
+        .includes(:primary_group)
+        .order(:username_lower)
+    end
+
+    def fetch_group_memberships(users, relevant_group_ids)
+      return {} if relevant_group_ids.blank?
+
+      GroupUser
+        .where(user_id: users.map(&:id), group_id: relevant_group_ids)
+        .includes(:group)
+        .group_by(&:user_id)
+    end
+
+    def fetch_badge_lookup(names)
+      return {} if names.blank?
+
+      normalized = names.map { |name| name.to_s.presence }.compact
+      return {} if normalized.blank?
+
+      badge_records =
+        Badge
+          .where(name: normalized)
+          .includes(:badge_type)
+          .index_by(&:name)
+
+      badge_records
+    end
+
+    def fetch_user_badges(users, badge_ids)
+      return {} if badge_ids.blank?
+
+      UserBadge
+        .where(user_id: users.map(&:id), badge_id: badge_ids)
+        .pluck(:user_id, :badge_id)
+        .each_with_object(Hash.new { |hash, key| hash[key] = [] }) do |(user_id, badge_id), acc|
+          next if acc[user_id].include?(badge_id)
+
+          acc[user_id] << badge_id
+        end
+    end
+
+    def build_grouped_users(members, relevant_groups, group_memberships, badges_lookup, user_badges)
+      lookup = configuration.group_priority.index_by { |item| item["group"] }
+
+      group_buckets = lookup.transform_values do |item|
+        label = item["label"].presence || item["group"]
+
+        { "group" => item["group"], "label" => label, "users" => [] }
+      end
+
+      unassigned = { "group" => nil, "label" => I18n.t("js.sixteen_aa_qualifications.group_heading_unassigned"), "users" => [] }
+
+      members.each do |user|
+        user_group = determine_primary_group(user, lookup, relevant_groups, group_memberships)
+        begin
+          user_data = serialize_user(user, badges_lookup, user_badges[user.id] || [])
+        rescue => e
+          log(
+            :error,
+            "serialize_user failed for user #{user.id} (#{user.username}): #{e.class} - #{e.message}\n#{e.backtrace.join("\n")}"
+          )
+          next
+        end
+
+        if user_group
+          group_buckets[user_group]["users"] << user_data
+        else
+          unassigned["users"] << user_data
+        end
+      end
+
+      group_buckets.each_value { |bucket| sort_users!(bucket["users"]) }
+      sort_users!(unassigned["users"])
+
+      ordered_groups = configuration.group_priority.map { |item| group_buckets[item["group"]] }
+      ordered_groups << unassigned if unassigned["users"].present?
+      ordered_groups.compact
+    end
+
+    def determine_primary_group(user, lookup, relevant_groups, group_memberships)
+      memberships = group_memberships[user.id]
+      return nil if memberships.blank?
+
+      membership_ids = memberships.map(&:group_id)
+
+      configuration.group_priority.each do |item|
+        group_name = item["group"]
+        group = relevant_groups[group_name]
+        next unless group
+        return group_name if membership_ids.include?(group.id)
+      end
+
+      nil
+    end
+
+    def serialize_user(user, badges_lookup, user_badges)
+      qualifications = serialize_qualifications(badges_lookup, user_badges)
+      grouped_qualifications = qualifications.select { |item| group_entry?(item) }
+      standalone_qualifications = qualifications.select { |item| standalone_entry?(item) }
+
+      base_user =
+        BasicUserSerializer
+          .new(user, scope: guardian, root: false)
+          .as_json
+
+      base_user["qualifications"] = qualifications
+      base_user["qualification_groups"] = grouped_qualifications
+      base_user["standalone_qualifications"] = standalone_qualifications
+      base_user["sort_weight"] = calculate_sort_weight(grouped_qualifications)
+      base_user
+    end
+
+    def serialize_qualifications(badges_lookup, user_badges)
+      configuration.qualifications.map do |definition|
+        if definition["levels"].is_a?(Array)
+          serialize_group_definition(definition, badges_lookup, user_badges)
+        else
+          serialize_standalone_definition(definition, badges_lookup, user_badges)
+        end
+      end
+    end
+
+    def serialize_group_definition(definition, badges_lookup, user_badges)
+      levels =
+        Array(definition["levels"]).map do |level|
+          level_data = level.is_a?(Hash) ? level.dup : { "badge" => level.to_s }
+          badge_name = level_data["badge"] || level_data[:badge]
+          badge_name = badge_name.to_s if badge_name
+          level_data["badge"] = badge_name if badge_name
+          badge = badge_name.present? ? badges_lookup[badge_name] : nil
+          level_data["badge_details"] = serialize_badge(badge) if badge
+          level_data
+        end
+
+      earned_level = nil
+      levels.each do |level|
+        badge_name = level["badge"] || level[:badge]
+        badge_name = badge_name.to_s if badge_name
+        next if badge_name.blank?
+
+        badge = badges_lookup[badge_name]
+        next unless badge&.id
+
+        earned_level = level if user_badges.include?(badge.id)
+      end
+
+      {
+        "key" => definition["key"],
+        "name" => definition["name"],
+        "empty_color" => definition["empty_color"],
+        "levels" => levels,
+        "earned" => earned_level,
+      }
+    end
+
+    def calculate_sort_weight(qualification_groups)
+      qualification_groups.filter_map do |group|
+        earned = group["earned"]
+        next unless earned
+
+        levels = group["levels"] || []
+        index = levels.find_index { |level| level["badge"] == earned["badge"] }
+        index ? index + 1 : 0
+      end.max || 0
+    end
+
+    def sort_users!(users)
+      users.sort_by! do |user|
+        [
+          -(user["sort_weight"] || 0),
+          user["username"].to_s.downcase,
+        ]
+      end
+    end
+
+    def serialize_standalone_definition(definition, badges_lookup, user_badges)
+      badge_name = (definition["badge"] || definition[:badge]).to_s
+      badge = badge_name ? badges_lookup[badge_name] : nil
+      badge_id = badge&.id
+      earned = badge_id && user_badges.include?(badge_id)
+      badge_details = serialize_badge(badge)
+
+      {
+        "key" => definition["key"],
+        "name" => definition["name"],
+        "badge" => badge_name,
+        "empty_color" => definition["empty_color"],
+        "badge_details" => badge_details,
+        "earned" => !!earned,
+      }
+    end
+
+    def group_entry?(item)
+      item["levels"].is_a?(Array)
+    end
+
+    def standalone_entry?(item)
+      !group_entry?(item)
+    end
+
+    def serialize_badge(badge)
+      return nil unless badge
+
+      {
+        "id" => badge.id,
+        "name" => badge.display_name || badge.name,
+        "slug" => badge.slug,
+        "description" => badge.description,
+        "description_text" => strip_tags(badge.description),
+        "image_url" => badge.image_url,
+        "icon" => badge.icon,
+        "url" => badge_url(badge),
+      }
+    end
+
+    def strip_tags(value)
+      return nil if value.blank?
+
+      ApplicationController.helpers.strip_tags(value)
+    end
+
+    def log(level, message)
+      Rails.logger.public_send(level, "#{PLUGIN_LOG_TAG} #{message}") if Rails.logger
+    end
+
+    def badge_url(badge)
+      slug = badge.slug.presence || badge.name.to_s.parameterize.presence
+      return nil unless badge.id
+
+      path = "/badges/#{badge.id}"
+      path = "#{path}/#{slug}" if slug
+      Discourse.base_path.present? ? "#{Discourse.base_path}#{path}" : path
+    end
+  end
+end
+
+
+
+==== FILE: ./lib/discourse_16aa_qualifications.rb ====
+# frozen_string_literal: true
+
+require "yaml"
+
+module ::Discourse16aaQualifications
+end
+
+require_relative "discourse_16aa_qualifications/configuration"
+require_relative "discourse_16aa_qualifications/config_seeder"
+require_relative "discourse_16aa_qualifications/roster_builder"
+
+
+

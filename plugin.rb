@@ -9,7 +9,7 @@
 enabled_site_setting :sixteen_aa_qualifications_enabled
 
 register_asset "stylesheets/common/qualifications.scss"
-register_asset "stylesheets/mobile/qualifications.scss"
+# register_asset "stylesheets/mobile/qualifications.scss"
 
 register_svg_icon "id-card-clip"
 
