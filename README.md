@@ -1,10 +1,9 @@
 # Discourse 16AA Qualifications Plugin
 
 ## TODO
+- Colour code user backgrounds depending on their group?
 - Add default fallback plugin settings json strings.
-- Implement some method so loading doesnt take so long when there are many users to display/search through.
-- Fix the wide CIC column that occurs sometimes.
-- Doesn't switch between light and dark mode until page is refreshed.
+- POSSIBLY FIXED, to be confirmed: Fix the wide CIC column that occurs sometimes.
 
 This plugin provides a consolidated qualifications roster for members of the 16AA community. It exposes a `/qualifications` page that lists every member of the configured base group and displays their earned qualifications grouped by category.
 
@@ -15,6 +14,7 @@ This plugin provides a consolidated qualifications roster for members of the 16A
 - Shows the highest qualification earned for each category, with colour-coded empty states when none are present.
 - Includes support for standalone qualifications outside of grouped hierarchies.
 - Adds an admin interface at `/admin/plugins/16aa-qualifications` for editing the group priority list and qualification definitions.
+- Keeps a pre-generated roster snapshot up to date via background jobs, so the public page loads quickly even during a cold visit.
 - Respects visibility and access options controlled via plugin site settings.
 
 ## Configuration

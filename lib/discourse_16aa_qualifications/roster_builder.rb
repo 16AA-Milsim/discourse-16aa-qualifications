@@ -3,6 +3,50 @@
 module Discourse16aaQualifications
   class RosterBuilder
     PLUGIN_LOG_TAG = "[discourse-16aa-qualifications]".freeze
+    RANK_SORT_LABELS = [
+      ["Major", "Maj"],
+      ["Captain", "Capt"],
+      ["Squadron Leader", "Squadron_Leader", "Sqn Ldr"],
+      ["Lieutenant", "Lt"],
+      ["Flight Lieutenant", "Flight_Lieutenant", "Flt Lt"],
+      ["Second Lieutenant", "Second_Lieutenant", "2Lt"],
+      ["Flying Officer", "Flying_Officer", "Fg Off"],
+      ["Pilot Officer", "Pilot_Officer", "Plt Off"],
+      ["Acting Second Lieutenant", "Acting_Second_Lieutenant", "A/2Lt"],
+      ["Warrant Officer Class 2", "Warrant_Officer_Class_2", "WO2"],
+      ["Colour Sergeant", "Colour_Sergeant", "CSgt"],
+      ["Staff Sergeant", "Staff_Sergeant", "SSgt"],
+      ["Flight Sergeant Aircrew", "Flight_Sergeant_Aircrew", "FSAcr"],
+      ["Sergeant", "Sgt"],
+      ["Sergeant Aircrew", "Sergeant_Aircrew", "SAcr"],
+      ["Acting Sergeant", "Acting_Sergeant", "A/Sgt"],
+      ["Corporal", "Cpl"],
+      ["Bombardier", "Bdr"],
+      ["Acting Corporal", "Acting_Corporal", "A/Cpl"],
+      ["Acting Bombardier", "Acting_Bombardier", "A/Bdr"],
+      ["Lance Corporal", "Lance_Corporal", "LCpl"],
+      ["Lance Bombardier", "Lance_Bombardier", "LBdr"],
+      ["Acting Lance Corporal", "Acting_Lance_Corporal", "A/LCpl"],
+      ["Acting Lance Bombardier", "Acting_Lance_Bombardier", "A/LBdr"],
+      ["Private", "Pte"],
+      ["Gunner", "Gnr"],
+      ["Recruit", "Rec"],
+    ].freeze
+    RANK_PRIORITY_LOOKUP = begin
+      mapping = {}
+      RANK_SORT_LABELS.each_with_index do |labels, index|
+        order = index + 1
+        Array(labels).each do |label|
+          normalized =
+            label.to_s.strip.downcase.gsub(/[_\s]+/, " ")
+          next if normalized.empty?
+
+          mapping[normalized] ||= order
+        end
+      end
+      mapping.freeze
+    end
+    RANK_FALLBACK_ORDER = RANK_PRIORITY_LOOKUP.values.max.to_i + 1
 
     def initialize(configuration, guardian: nil)
       @configuration = configuration
@@ -233,10 +277,73 @@ module Discourse16aaQualifications
     def sort_users!(users)
       users.sort_by! do |user|
         [
+          rank_sort_value(user),
           -(user["sort_weight"] || 0),
           user["username"].to_s.downcase,
         ]
       end
+    end
+
+    def rank_sort_value(user)
+      return RANK_FALLBACK_ORDER unless user.is_a?(Hash)
+
+      values_to_check = [
+        user_value(user, :rank_prefix),
+        user_value(user, :rank),
+        user_value(user, :title),
+        user_value(user, :primary_group_name),
+        user_value(user, :primary_group),
+        user_value(user, :display_name),
+        user_value(user, :name),
+        user_value(user, :username),
+      ]
+
+      values_to_check.each do |value|
+        rank_order = detect_rank_order(value)
+        return rank_order if rank_order
+      end
+
+      RANK_FALLBACK_ORDER
+    end
+
+    def user_value(user, key)
+      return nil unless user.respond_to?(:[])
+
+      user[key] || user[key.to_s] || user[key.to_sym]
+    end
+
+    def detect_rank_order(value)
+      normalized_candidates(value).each do |candidate|
+        order = RANK_PRIORITY_LOOKUP[candidate]
+        return order if order
+      end
+
+      nil
+    end
+
+    def normalized_candidates(value)
+      raw =
+        value
+          .to_s
+          .strip
+      return [] if raw.empty?
+
+      normalized =
+        raw
+          .downcase
+          .tr("_", " ")
+          .gsub(/[^a-z0-9\/\s]+/, "")
+          .squeeze(" ")
+          .strip
+      return [] if normalized.empty?
+
+      parts = normalized.split(" ")
+
+      candidates = []
+      parts.each_index do |index|
+        candidates << parts[0..index].join(" ")
+      end
+      candidates
     end
 
     def serialize_standalone_definition(definition, badges_lookup, user_badges)

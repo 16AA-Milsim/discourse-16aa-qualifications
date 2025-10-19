@@ -37,9 +37,13 @@
         <tr class="qualification-row">
           <td class="user-cell">
             <div class="user-meta">
-              <UserLink @user={{row.user}} class="username" data-username={{row.user.username}}>
+              <a
+                class="username"
+                href={{row.user.summaryUrl}}
+                data-username={{row.user.username}}
+              >
                 {{row.user.displayName}}
-              </UserLink>
+              </a>
               <span class="unit-position">
                 {{#if row.groupLabel}}
                 {{row.groupLabel}}

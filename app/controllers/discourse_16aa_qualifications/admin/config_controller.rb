@@ -38,11 +38,14 @@ module Discourse16aaQualifications
           serialize_setting(split[:standalone]),
         )
 
+        ::Discourse16aaQualifications::RosterCache.refresh!
+
         render json: success_payload
       end
 
       def reset
         ConfigSeeder.reset_to_defaults!
+        ::Discourse16aaQualifications::RosterCache.refresh!
         render json: success_payload
       end
 

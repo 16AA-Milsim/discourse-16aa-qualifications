@@ -74,6 +74,7 @@ $qual-hover-overlay-dark:  rgba(255, 255, 255, 0.05);
 /* ===== ROOT ===== */
 
 .qualifications-page--light {
+  max-width: 1065px;
   @include set-qualification-vars(
     $qual-table-bg-light, $qual-header-text-light, $qual-header-bg-light, $qual-header-shadow-light, $qual-border-color-light, $qual-row-border-light,
     $qual-username-color-light, $qual-real-name-color-light, $qual-unit-position-color-light, $qual-missing-text-light,
@@ -83,6 +84,7 @@ $qual-hover-overlay-dark:  rgba(255, 255, 255, 0.05);
 }
 
 .qualifications-page--dark {
+  max-width: 1065px;
   @include set-qualification-vars(
     $qual-table-bg-dark, $qual-header-text-dark, $qual-header-bg-dark, $qual-header-shadow-dark, $qual-border-color-dark, $qual-row-border-dark,
     $qual-username-color-dark, $qual-real-name-color-dark, $qual-unit-position-color-dark, $qual-missing-text-dark,

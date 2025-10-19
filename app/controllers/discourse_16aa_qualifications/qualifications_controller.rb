@@ -11,7 +11,7 @@ module Discourse16aaQualifications
     def index
       if request.format.json?
         config = Configuration.load
-        roster = RosterBuilder.new(config, guardian: guardian).build
+        roster = RosterCache.fetch_or_build(config, guardian: guardian)
         render_json_dump(roster)
       else
         render body: nil

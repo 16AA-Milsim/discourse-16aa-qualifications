@@ -1,5 +1,7 @@
 import Controller from "@ember/controller";
 import { action } from "@ember/object";
+import { tracked } from "@glimmer/tracking";
+import { service } from "@ember/service";
 import { formatUsername } from "discourse/lib/utilities";
 import applyQualificationColours from "../lib/qualification-cell-colours";
 import getURL from "discourse/lib/get-url";
@@ -26,6 +28,30 @@ const DARK_COLOR_FALLBACKS = {
 };
 
 export default class QualificationsController extends Controller {
+  @service appEvents;
+  @tracked schemeTypeValue = "light";
+
+  constructor() {
+    super(...arguments);
+    this._setupThemeListeners();
+    this.appEvents.on(
+      "interface-color:changed",
+      this,
+      "_handleInterfaceColorChange"
+    );
+    this._updateSchemeType(true);
+  }
+
+  willDestroy() {
+    super.willDestroy(...arguments);
+    this._teardownThemeListeners();
+    this.appEvents.off(
+      "interface-color:changed",
+      this,
+      "_handleInterfaceColorChange"
+    );
+  }
+
   get memberRows() {
     const groups = this.model?.groups || [];
     const rows = [];
@@ -78,30 +104,12 @@ export default class QualificationsController extends Controller {
       ...user,
       qualifications,
       displayName: this.displayNameFor(user),
+      summaryUrl: this.summaryUrlFor(user),
     };
   }
 
   get schemeType() {
-    if (typeof window === "undefined") {
-      return "light";
-    }
-
-    try {
-      const value = getComputedStyle(document.body).getPropertyValue(
-        "--scheme-type"
-      );
-      if (value?.trim()) {
-        return value.trim() === "dark" ? "dark" : "light";
-      }
-    } catch (e) {
-      // fall through to matchMedia or default
-    }
-
-    if (window.matchMedia?.("(prefers-color-scheme: dark)")?.matches) {
-      return "dark";
-    }
-
-    return "light";
+    return this.schemeTypeValue;
   }
 
   get isDarkScheme() {
@@ -153,6 +161,16 @@ export default class QualificationsController extends Controller {
     }
 
     return formatted;
+  }
+
+  summaryUrlFor(user) {
+    const username = user?.username;
+    if (!username) {
+      return null;
+    }
+
+    const encoded = encodeURIComponent(username.toLowerCase());
+    return getURL(`/u/${encoded}/summary`);
   }
 
   hasQualification = (qualification) => {
@@ -293,5 +311,139 @@ export default class QualificationsController extends Controller {
   applyColours(element) {
     this._colorPalette = null;
     applyQualificationColours(element);
+  }
+
+  _setupThemeListeners() {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return;
+    }
+
+    this._themeMutationHandler = () => this._onThemeChanged();
+
+    const attributeFilter = [
+      "data-theme-id",
+      "data-theme-name",
+      "data-base-theme-id",
+      "data-user-color-scheme-id",
+      "data-color-scheme",
+      "class",
+    ];
+
+    if (typeof MutationObserver !== "undefined") {
+      this._themeObserver = new MutationObserver(this._themeMutationHandler);
+      this._themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter,
+      });
+
+      this._bodyThemeObserver = new MutationObserver(this._themeMutationHandler);
+      this._bodyThemeObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter,
+      });
+
+      this._headObserver = new MutationObserver(this._themeMutationHandler);
+      this._headObserver.observe(document.head, {
+        childList: true,
+        subtree: false,
+      });
+    }
+
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (media) {
+      this._mediaQueryList = media;
+      this._mediaListener = () => this._onThemeChanged();
+      if (media.addEventListener) {
+        media.addEventListener("change", this._mediaListener);
+      } else if (media.addListener) {
+        media.addListener(this._mediaListener);
+      }
+    }
+  }
+
+  _teardownThemeListeners() {
+    if (this._themeObserver) {
+      this._themeObserver.disconnect();
+      this._themeObserver = null;
+    }
+    if (this._bodyThemeObserver) {
+      this._bodyThemeObserver.disconnect();
+      this._bodyThemeObserver = null;
+    }
+
+    if (this._headObserver) {
+      this._headObserver.disconnect();
+      this._headObserver = null;
+    }
+    this._themeMutationHandler = null;
+
+    if (this._mediaListener) {
+      const media = this._mediaQueryList;
+      if (media?.removeEventListener) {
+        media.removeEventListener("change", this._mediaListener);
+      } else if (media?.removeListener) {
+        media.removeListener(this._mediaListener);
+      }
+      this._mediaListener = null;
+      this._mediaQueryList = null;
+    }
+
+    if (this._themeRaf) {
+      cancelAnimationFrame(this._themeRaf);
+      this._themeRaf = null;
+    }
+  }
+
+  _onThemeChanged() {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (this._themeRaf) {
+      cancelAnimationFrame(this._themeRaf);
+    }
+
+    this._themeRaf = window.requestAnimationFrame(() => {
+      this._themeRaf = window.requestAnimationFrame(() => {
+        this._themeRaf = null;
+        this._updateSchemeType();
+        this._colorPalette = null;
+        const wrapper = document.querySelector(".qualifications-table-wrapper");
+        if (wrapper) {
+          this.applyColours(wrapper);
+        }
+      });
+    });
+  }
+
+  _handleInterfaceColorChange() {
+    this._onThemeChanged();
+  }
+
+  _updateSchemeType(force = false) {
+    if (typeof window === "undefined") {
+      this.schemeTypeValue = "light";
+      return;
+    }
+
+    let detected = "light";
+    try {
+      const root = document.documentElement || document.body;
+      const value =
+        root && getComputedStyle(root).getPropertyValue("--scheme-type");
+      if (value?.trim()) {
+        detected = value.trim() === "dark" ? "dark" : "light";
+      } else if (window.matchMedia?.("(prefers-color-scheme: dark)")?.matches) {
+        detected = "dark";
+      }
+    } catch (e) {
+      if (window.matchMedia?.("(prefers-color-scheme: dark)")?.matches) {
+        detected = "dark";
+      }
+    }
+
+    if (force || detected !== this.schemeTypeValue) {
+      this.schemeTypeValue = detected;
+    }
   }
 }
