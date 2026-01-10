@@ -1,6 +1,7 @@
 # Discourse 16AA Qualifications Plugin
 
 ## TODO
+- REMOVE the Qualifications link in the top bar next to "Unread", "Latest" etc.
 - Colour code user backgrounds depending on their group?
 - Add default fallback plugin settings json strings.
 - POSSIBLY FIXED, to be confirmed: Fix the wide CIC column that occurs sometimes.
