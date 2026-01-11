@@ -61,15 +61,6 @@ export default {
         return;
       }
 
-      const condition = () => canViewRoster(siteSettings, api.getCurrentUser());
-
-      api.addNavigationBarItem({
-        name: "qualifications",
-        displayName: I18n.t("sixteen_aa_qualifications.nav_link"),
-        href: "/qualifications",
-        customFilter: condition,
-      });
-
       api.addCommunitySectionLink((BaseCommunitySectionLink) => {
         return class extends BaseCommunitySectionLink {
           get name() {
