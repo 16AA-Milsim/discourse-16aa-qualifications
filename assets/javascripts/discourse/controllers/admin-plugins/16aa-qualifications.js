@@ -1,16 +1,25 @@
 import Controller from "@ember/controller";
-import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
+import { service } from "@ember/service";
+import { tracked } from "@glimmer/tracking";
 import { ajax } from "discourse/lib/ajax";
 import { popupAjaxError } from "discourse/lib/ajax-error";
-import I18n from "I18n";
+import { i18n } from "discourse-i18n";
 
 export default class Admin16AAQualificationsController extends Controller {
-  @tracked groupPriorityText = "[]";
-  @tracked qualificationsText = "[]";
-  @tracked isSaving = false;
+  @service toasts;
 
-  loadConfig(model) {
+  @tracked disallow = false;
+  @tracked groupPriorityText = "[]";
+  @tracked isSaving = false;
+  @tracked qualificationsText = "[]";
+
+  setup(model) {
+    this.disallow = !!model?.disallow;
+    if (this.disallow) {
+      return;
+    }
+
     this.applyConfig(model);
   }
 
@@ -26,7 +35,7 @@ export default class Admin16AAQualificationsController extends Controller {
 
     try {
       return JSON.stringify(value, null, 2);
-    } catch (e) {
+    } catch {
       return "[]";
     }
   }
@@ -52,13 +61,15 @@ export default class Admin16AAQualificationsController extends Controller {
       groupPriority = this.parse(this.groupPriorityText, "Group priority");
       qualifications = this.parse(this.qualificationsText, "Qualification definitions");
     } catch (error) {
-      this.flash(error.message, "error");
+      this.toasts.error({
+        data: { message: error.message },
+      });
       return;
     }
 
     this.isSaving = true;
 
-    ajax("/16aa-qualifications/admin/config", {
+    ajax("/admin/plugins/16aa-qualifications", {
       type: "PUT",
       data: {
         config: {
@@ -69,7 +80,10 @@ export default class Admin16AAQualificationsController extends Controller {
     })
       .then((response) => {
         if (response?.success) {
-          this.flash(I18n.t("sixteen_aa_qualifications.admin.save_success"), "success");
+          this.toasts.success({
+            data: { message: i18n("sixteen_aa_qualifications.admin.save_success") },
+          });
+
           if (response.config) {
             this.applyConfig(response.config);
           }
@@ -85,13 +99,15 @@ export default class Admin16AAQualificationsController extends Controller {
   resetToDefaults() {
     this.isSaving = true;
 
-    ajax("/16aa-qualifications/admin/config/reset", {
+    ajax("/admin/plugins/16aa-qualifications/reset", {
       type: "POST",
     })
       .then((response) => {
         if (response?.success && response.config) {
           this.applyConfig(response.config);
-          this.flash(I18n.t("sixteen_aa_qualifications.admin.reset_success"), "success");
+          this.toasts.success({
+            data: { message: i18n("sixteen_aa_qualifications.admin.reset_success") },
+          });
         }
       })
       .catch(popupAjaxError)

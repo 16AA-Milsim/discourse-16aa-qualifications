@@ -134,7 +134,7 @@ qualification_groups:
   - key: "soldiering"
     name: "CIC"
     tooltip: "Combat Infantryman's Course"
-    empty_color: "--16aa-qual-red"
+    empty_color: "--16aa-qual-yellow"
     levels:
       - badge: "CIC Phase 1"
         label: "P1"
@@ -144,7 +144,7 @@ qualification_groups:
   - key: "marksmanship"
     name: "Mksm"
     tooltip: "Marksmanship"
-    empty_color: "--16aa-qual-red"
+    empty_color: "--16aa-qual-yellow"
     levels:
       - badge: "3rd Class Marksman"
         label: "3C"

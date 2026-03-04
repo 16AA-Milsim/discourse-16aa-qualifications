@@ -1,10 +1,10 @@
+import { tracked } from "@glimmer/tracking";
 import Controller from "@ember/controller";
 import { action } from "@ember/object";
-import { tracked } from "@glimmer/tracking";
 import { service } from "@ember/service";
+import getURL from "discourse/lib/get-url";
 import { formatUsername } from "discourse/lib/utilities";
 import applyQualificationColours from "../lib/qualification-cell-colours";
-import getURL from "discourse/lib/get-url";
 
 const COLOR_TOKENS = [
   "--16aa-qual-red",
@@ -29,9 +29,129 @@ const DARK_COLOR_FALLBACKS = {
 
 export default class QualificationsController extends Controller {
   @service appEvents;
+
   @tracked schemeTypeValue = "light";
 
-  constructor() {
+  hasQualification = (qualification) => {
+    if (!qualification) {
+      return false;
+    }
+
+    if (Array.isArray(qualification.levels)) {
+      return Boolean(qualification.earned);
+    }
+
+    return Boolean(qualification.earned);
+  };
+
+qualificationLabel = (qualification) => {
+    if (!qualification) {
+      return null;
+    }
+
+    if (Array.isArray(qualification.levels)) {
+      const earned = qualification.earned;
+      if (!earned) {
+        return null;
+      }
+
+      return earned.label || earned.badge;
+    }
+
+    if (!qualification.earned) {
+      return null;
+    }
+
+    return qualification.name || qualification.badge || "✔";
+  };
+
+badgeDetails = (qualification) => {
+    if (!qualification) {
+      return null;
+    }
+
+    if (Array.isArray(qualification.levels)) {
+      return qualification.earned?.badge_details || null;
+    }
+
+    return qualification.badge_details || null;
+  };
+
+badgeLink = (badgeDetails) => {
+    if (!badgeDetails) {
+      return null;
+    }
+
+    let url = badgeDetails.url;
+
+    if (!url) {
+      const id = badgeDetails.id;
+      const slug = badgeDetails.slug || badgeDetails.name;
+
+      if (id) {
+        url = `/badges/${id}`;
+        if (slug) {
+          url += `/${slug}`;
+        }
+      }
+    }
+
+    return url ? getURL(url) : null;
+  };
+
+badgeDescription = (badgeDetails) => {
+    if (!badgeDetails) {
+      return null;
+    }
+
+    return (
+      badgeDetails.long_description_text ||
+      badgeDetails.description_text ||
+      this.stripHtml(badgeDetails.long_description) ||
+      this.stripHtml(badgeDetails.description) ||
+      null
+    );
+  };
+
+displayValueFor = (qualification) => {
+    if (!this.hasQualification(qualification)) {
+      return "";
+    }
+
+    if (Array.isArray(qualification.levels)) {
+      return this.qualificationLabel(qualification) || "";
+    }
+
+    return "✔";
+  };
+
+backgroundColor = (qual) => {
+    if (!qual || qual.earned) {
+      return null;
+    }
+
+    const rawColor = qual.empty_color;
+    if (!rawColor) {
+      return null;
+    }
+
+    if (typeof rawColor === "string") {
+      const trimmed = rawColor.trim();
+      if (!trimmed) {
+        return null;
+      }
+
+      if (trimmed.startsWith("--")) {
+        return this.resolveThemeColor(trimmed);
+      }
+
+      return trimmed;
+    }
+
+    return rawColor;
+  };
+
+constructor() {
     super(...arguments);
     this._setupThemeListeners();
     this.appEvents.on(
@@ -173,100 +293,21 @@ export default class QualificationsController extends Controller {
     return getURL(`/u/${encoded}/summary`);
   }
 
-  hasQualification = (qualification) => {
-    if (!qualification) {
-      return false;
-    }
+  
 
-    if (Array.isArray(qualification.levels)) {
-      return Boolean(qualification.earned);
-    }
+  
 
-    return Boolean(qualification.earned);
-  };
+  
 
-  qualificationLabel = (qualification) => {
-    if (!qualification) {
-      return null;
-    }
+  
 
-    if (Array.isArray(qualification.levels)) {
-      const earned = qualification.earned;
-      if (!earned) {
-        return null;
-      }
+  
 
-      return earned.label || earned.badge;
-    }
+  
 
-    if (!qualification.earned) {
-      return null;
-    }
+  
 
-    return qualification.name || qualification.badge || "✔";
-  };
-
-  badgeDetails = (qualification) => {
-    if (!qualification) {
-      return null;
-    }
-
-    if (Array.isArray(qualification.levels)) {
-      return qualification.earned?.badge_details || null;
-    }
-
-    return qualification.badge_details || null;
-  };
-
-  badgeLink = (badgeDetails) => {
-    if (!badgeDetails) {
-      return null;
-    }
-
-    let url = badgeDetails.url;
-
-    if (!url) {
-      const id = badgeDetails.id;
-      const slug = badgeDetails.slug || badgeDetails.name;
-
-      if (id) {
-        url = `/badges/${id}`;
-        if (slug) {
-          url += `/${slug}`;
-        }
-      }
-    }
-
-    return url ? getURL(url) : null;
-  };
-
-  badgeDescription = (badgeDetails) => {
-    if (!badgeDetails) {
-      return null;
-    }
-
-    return (
-      badgeDetails.long_description_text ||
-      badgeDetails.description_text ||
-      this.stripHtml(badgeDetails.long_description) ||
-      this.stripHtml(badgeDetails.description) ||
-      null
-    );
-  };
-
-  displayValueFor = (qualification) => {
-    if (!this.hasQualification(qualification)) {
-      return "";
-    }
-
-    if (Array.isArray(qualification.levels)) {
-      return this.qualificationLabel(qualification) || "";
-    }
-
-    return "✔";
-  };
-
-  stripHtml(source) {
+stripHtml(source) {
     if (!source) {
       return null;
     }
@@ -281,31 +322,7 @@ export default class QualificationsController extends Controller {
     return text.trim() || null;
   }
 
-  backgroundColor = (qual) => {
-    if (!qual || qual.earned) {
-      return null;
-    }
-
-    const rawColor = qual.empty_color;
-    if (!rawColor) {
-      return null;
-    }
-
-    if (typeof rawColor === "string") {
-      const trimmed = rawColor.trim();
-      if (!trimmed) {
-        return null;
-      }
-
-      if (trimmed.startsWith("--")) {
-        return this.resolveThemeColor(trimmed);
-      }
-
-      return trimmed;
-    }
-
-    return rawColor;
-  };
+  
 
   @action
   applyColours(element) {
@@ -436,7 +453,7 @@ export default class QualificationsController extends Controller {
       } else if (window.matchMedia?.("(prefers-color-scheme: dark)")?.matches) {
         detected = "dark";
       }
-    } catch (e) {
+    } catch {
       if (window.matchMedia?.("(prefers-color-scheme: dark)")?.matches) {
         detected = "dark";
       }

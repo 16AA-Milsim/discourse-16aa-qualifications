@@ -1,3 +1,8 @@
+{{#if this.disallow}}
+  <div class="qualifications-empty">
+    {{i18n "admin.site_settings.only_admins"}}
+  </div>
+{{else}}
 <section class="qualifications-admin">
   <header class="qualifications-admin__header">
     <h1>{{i18n "sixteen_aa_qualifications.admin.title"}}</h1>
@@ -50,3 +55,4 @@
     {{i18n "sixteen_aa_qualifications.admin.seed_warning"}}
   </aside>
 </section>
+{{/if}}

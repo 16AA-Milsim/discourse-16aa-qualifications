@@ -1,7 +1,5 @@
 import { withPluginApi } from "discourse/lib/plugin-api";
-import I18n from "I18n";
-
-const PLUGIN_API_VERSION = "1.20.0";
+import { i18n } from "discourse-i18n";
 
 function canViewRoster(siteSettings, currentUser) {
   if (!siteSettings?.sixteen_aa_qualifications_enabled) {
@@ -32,11 +30,16 @@ function canViewRoster(siteSettings, currentUser) {
     case "trust_level_4":
       return currentUser.trust_level >= 4;
     case "groups": {
-      const allowed =
+      let allowed =
         (siteSettings.sixteen_aa_qualifications_allowed_groups || "")
           .split("|")
           .map((g) => g.trim())
           .filter(Boolean);
+
+      if (allowed.length === 0) {
+        const fallback = (siteSettings.sixteen_aa_qualifications_member_group_name || "").trim();
+        allowed = fallback ? [fallback] : [];
+      }
 
       if (allowed.length === 0) {
         return false;
@@ -54,7 +57,7 @@ export default {
   name: "16aa-qualifications-nav",
 
   initialize() {
-    withPluginApi(PLUGIN_API_VERSION, (api) => {
+    withPluginApi((api) => {
       const siteSettings = api.container.lookup("service:site-settings");
 
       if (!siteSettings?.sixteen_aa_qualifications_enabled) {
@@ -76,11 +79,11 @@ export default {
           }
 
           get title() {
-            return I18n.t("sixteen_aa_qualifications.nav_link");
+            return i18n("sixteen_aa_qualifications.nav_link");
           }
 
           get text() {
-            return I18n.t("sixteen_aa_qualifications.nav_link");
+            return i18n("sixteen_aa_qualifications.nav_link");
           }
 
           get prefixValue() {

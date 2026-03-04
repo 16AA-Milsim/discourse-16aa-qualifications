@@ -3,9 +3,9 @@
 module Discourse16aaQualifications
   class QualificationsController < ::ApplicationController
     requires_plugin Discourse16aaQualifications::PLUGIN_NAME
+    requires_login false
 
     before_action :ensure_enabled!
-    before_action :ensure_logged_in
     before_action :ensure_can_view!
 
     def index
@@ -28,6 +28,8 @@ module Discourse16aaQualifications
       visibility = SiteSetting.sixteen_aa_qualifications_visibility
 
       return if visibility == "everyone"
+
+      ensure_logged_in
       return if current_user&.staff?
 
       case visibility

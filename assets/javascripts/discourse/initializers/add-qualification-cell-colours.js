@@ -11,7 +11,7 @@ export default {
 
     window.__qualificationCellColoursInitialized = true;
 
-    withPluginApi("1.20.0", (api) => {
+    withPluginApi((api) => {
       api.decorateCookedElement(
         (root) => applyQualificationColours(root),
         { onlyStream: false }

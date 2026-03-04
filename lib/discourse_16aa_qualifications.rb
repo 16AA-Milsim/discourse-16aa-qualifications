@@ -3,6 +3,7 @@
 require "yaml"
 
 module ::Discourse16aaQualifications
+  PLUGIN_NAME = "discourse-16aa-qualifications".freeze
 end
 
 require_relative "discourse_16aa_qualifications/configuration"

@@ -7,21 +7,24 @@
 # url: https://github.com/16aarapidreactionforce/discourse-16aa-qualifications
 
 enabled_site_setting :sixteen_aa_qualifications_enabled
+add_admin_route "sixteen_aa_qualifications.admin.title", "16aa-qualifications"
 
 register_asset "stylesheets/common/qualifications.scss"
 # register_asset "stylesheets/mobile/qualifications.scss"
 
 register_svg_icon "id-card-clip"
-
 require_relative "lib/engine"
 
 after_initialize do
   ::Discourse16aaQualifications::ConfigSeeder.seed_if_needed!
 
   Discourse::Application.routes.append do
-    mount ::Discourse16aaQualifications::Engine, at: "/16aa-qualifications"
     get "/qualifications" => "discourse_16aa_qualifications/qualifications#index"
     get "/qualifications.json" => "discourse_16aa_qualifications/qualifications#index", defaults: { format: :json }
+    get "/admin/plugins/16aa-qualifications.json" => "discourse_16aa_qualifications/admin/config#show"
+    get "/admin/plugins/16aa-qualifications" => "admin/plugins#index"
+    put "/admin/plugins/16aa-qualifications" => "discourse_16aa_qualifications/admin/config#update"
+    post "/admin/plugins/16aa-qualifications/reset" => "discourse_16aa_qualifications/admin/config#reset"
   end
 
   schedule_roster_refresh = ->(force = false) do

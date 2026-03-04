@@ -109,9 +109,13 @@ $qual-hover-overlay-dark:  rgba(255, 255, 255, 0.05);
 /* ===== CELL LAYERS ===== */
 
 .qualification-cell__content {
-  position: relative; z-index: 2;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   display: flex; align-items: center; justify-content: center;
-  width: 100%; height: 100%; text-align: center;
+  width: 100%;
+  height: 100%;
+  text-align: center;
 }
 
 /* ===== TABLE ===== */
@@ -345,8 +349,22 @@ td.qualification-cell.qualified::before {
 .qualification-cell__trigger:focus { color: inherit; }
 
 .qualification-cell__trigger-wrapper {
-  display: flex; align-items: center; justify-content: center;
-  width: 100%; height: 100%; padding: 0.35rem 0.45rem; box-sizing: border-box; text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+}
+
+.qualification-cell__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0.35rem 0.45rem;
+  box-sizing: border-box;
 }
 .qualification-cell__trigger--empty { min-height: 1.2rem; }
 .qualification-cell__trigger-wrapper--empty { pointer-events: none; }
