@@ -69,12 +69,15 @@ export default class Admin16AAQualificationsController extends Controller {
 
     this.isSaving = true;
 
-    ajax("/admin/plugins/16aa-qualifications", {
+    const serializedGroupPriority = JSON.stringify(groupPriority);
+    const serializedQualifications = JSON.stringify(qualifications);
+
+    ajax("/admin/plugins/16aa-qualifications/config", {
       type: "PUT",
       data: {
         config: {
-          group_priority: groupPriority,
-          qualifications,
+          group_priority: serializedGroupPriority,
+          qualifications: serializedQualifications,
         },
       },
     })
@@ -99,7 +102,7 @@ export default class Admin16AAQualificationsController extends Controller {
   resetToDefaults() {
     this.isSaving = true;
 
-    ajax("/admin/plugins/16aa-qualifications/reset", {
+    ajax("/admin/plugins/16aa-qualifications/config/reset", {
       type: "POST",
     })
       .then((response) => {

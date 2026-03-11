@@ -28,6 +28,7 @@ module Discourse16aaQualifications
         )
 
         migrate_legacy_empty_colors!
+        Configuration.sync_store_from_site_settings!
       end
 
       def reset_to_defaults!
@@ -48,6 +49,7 @@ module Discourse16aaQualifications
           "sixteen_aa_qualifications_standalone_definitions",
           defaults["standalone_qualifications"],
         )
+        Configuration.sync_store_from_site_settings!
       end
 
       private
@@ -78,6 +80,7 @@ module Discourse16aaQualifications
           split = split_definitions(definitions)
           apply_setting("sixteen_aa_qualifications_group_definitions", split[:groups])
           apply_setting("sixteen_aa_qualifications_standalone_definitions", split[:standalone])
+          Configuration.sync_store_from_site_settings!
         end
 
         PluginStore.set(::Discourse16aaQualifications::PLUGIN_NAME, EMPTY_COLOR_MIGRATION_KEY, true)

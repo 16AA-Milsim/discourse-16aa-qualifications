@@ -13,6 +13,8 @@ register_asset "stylesheets/common/qualifications.scss"
 # register_asset "stylesheets/mobile/qualifications.scss"
 
 register_svg_icon "id-card-clip"
+register_svg_icon "save"
+register_svg_icon "history"
 require_relative "lib/engine"
 
 after_initialize do
@@ -21,9 +23,14 @@ after_initialize do
   Discourse::Application.routes.append do
     get "/qualifications" => "discourse_16aa_qualifications/qualifications#index"
     get "/qualifications.json" => "discourse_16aa_qualifications/qualifications#index", defaults: { format: :json }
-    get "/admin/plugins/16aa-qualifications.json" => "discourse_16aa_qualifications/admin/config#show"
+    get "/admin/plugins/16aa-qualifications/config.json" =>
+          "discourse_16aa_qualifications/admin/config#show"
     get "/admin/plugins/16aa-qualifications" => "admin/plugins#index"
+    put "/admin/plugins/16aa-qualifications/config" =>
+          "discourse_16aa_qualifications/admin/config#update"
     put "/admin/plugins/16aa-qualifications" => "discourse_16aa_qualifications/admin/config#update"
+    post "/admin/plugins/16aa-qualifications/config/reset" =>
+           "discourse_16aa_qualifications/admin/config#reset"
     post "/admin/plugins/16aa-qualifications/reset" => "discourse_16aa_qualifications/admin/config#reset"
   end
 

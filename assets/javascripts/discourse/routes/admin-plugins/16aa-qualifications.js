@@ -7,7 +7,7 @@ export default class AdminPlugins16aaQualificationsRoute extends DiscourseRoute 
       return { disallow: true };
     }
 
-    return ajax("/admin/plugins/16aa-qualifications.json");
+    return ajax("/admin/plugins/16aa-qualifications/config.json");
   }
 
   setupController(controller, model) {

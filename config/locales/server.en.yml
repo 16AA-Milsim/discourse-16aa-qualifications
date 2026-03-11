@@ -2,6 +2,7 @@ en:
   sixteen_aa_qualifications:
     admin:
       title: "16AA Qualifications"
+      invalid_config_payload: "Invalid configuration payload received. Please reload the page and try saving again."
   site_settings:
     sixteen_aa_qualifications_enabled: "Enable the 16AA qualifications roster plugin."
     sixteen_aa_qualifications_visibility: "Minimum visibility requirement for the qualifications roster."
